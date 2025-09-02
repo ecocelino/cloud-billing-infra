@@ -27,21 +27,23 @@ const useYearlyBillingData = (platform, year) => {
       try {
         const response = await fetch(`${API_BASE_URL}/billing/services?platform=${platform}&year=${year}`);
         const rawData = await response.json();
+
+        // --- DEBUG LOG 1: Check the raw data from the API ---
+        console.log("1. Raw data received from API:", rawData);
+
         if (!Array.isArray(rawData)) {
             setProcessedData([]);
             return;
         }
 
         const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-        const renameMonthIndex = 4; // May
-        const transferMonthIndex = 5; // June
+        const renameMonthIndex = 4;
+        const transferMonthIndex = 5;
         const transferYear = 2025;
 
-        // Step 1: Transform raw data by correcting project names first.
         const transformedData = rawData.map(item => {
             let targetProjectName = item.project_name;
             const monthIndex = months.indexOf(item.billing_month);
-
             if (item.project_name === '[Charges not specific to a project]') {
                 if (year < transferYear || (year === transferYear && monthIndex <= renameMonthIndex)) {
                     targetProjectName = 'Netenrich Resolution Intelligence Cloud';
@@ -49,34 +51,31 @@ const useYearlyBillingData = (platform, year) => {
                     targetProjectName = 'ai-research-and-development';
                 }
             }
-            // Return a new object with the potentially updated project name
             return { ...item, project_name: targetProjectName };
         });
 
-        // Step 2: Aggregate the clean, transformed data.
         const projects = {};
         transformedData.forEach(item => {
             const projectName = item.project_name;
             if (!projects[projectName]) {
                 projects[projectName] = { 
-                    project_name: projectName,
-                    platform: item.platform,
-                    billing_year: item.billing_year,
-                    service_breakdown: [] 
+                    project_name: projectName, platform: item.platform,
+                    billing_year: item.billing_year, service_breakdown: [] 
                 };
                 months.forEach(m => { projects[projectName][`${m}_cost`] = 0; });
             }
-            // Add the detailed service item to its project's breakdown
             projects[projectName].service_breakdown.push(item);
-
-            // Add the cost of this service item to the project's monthly total
             const itemMonth = item.billing_month;
             if (itemMonth && months.includes(itemMonth)) {
                  projects[projectName][`${itemMonth}_cost`] += parseFloat(item.cost || 0);
             }
         });
         
-        setProcessedData(Object.values(projects));
+        const finalData = Object.values(projects);
+
+        // --- DEBUG LOG 2: Check the final data before it's sent to the components ---
+        console.log("2. Processed data being sent to components:", finalData);
+        setProcessedData(finalData);
 
       } catch (error) {
         console.error("Failed to process billing data:", error);
@@ -98,9 +97,17 @@ const App = () => {
   const [platformFilter, setPlatformFilter] = useState('GCP');
   const [envFilter, setEnvFilter] = useState('all');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [error, setError] = useState('');
   const { yearlyBillingData, isBillingLoading } = useYearlyBillingData(platformFilter, selectedYear);
   
-  const handleLogin = (username, password) => { /* ... */ };
+  const handleLogin = (username, password) => {
+    if (username === 'admin' && password === 'password') {
+      setIsLoggedIn(true);
+      setError('');
+    } else {
+      setError('Invalid username or password.');
+    }
+  };
   const handleLogout = () => { setIsLoggedIn(false); };
   
   const AppContent = () => (
@@ -121,7 +128,7 @@ const App = () => {
       <div className="flex-1 p-4 sm:p-8 overflow-y-auto">
         <main className="max-w-7xl mx-auto">
           {isBillingLoading && <div className="text-center p-10 font-semibold text-gray-500">Loading Billing Data...</div>}
-          {!isBillingLoading && view === 'dashboard' && <DashboardView inventory={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} />}
+          {!isBillingLoading && view === 'dashboard' && <DashboardView inventory={yearlyBillingData} initialYear={selectedYear} setSelectedYear={setSelectedYear} />}
           {!isBillingLoading && view === 'projects' && <ProjectsView yearlyData={yearlyBillingData} initialYear={selectedYear} envFilter={envFilter} />}
           {!isBillingLoading && view === 'billing' && <BillingView billingData={yearlyBillingData} selectedYear={selectedYear} platformFilter={platformFilter}/>}
         </main>
@@ -129,6 +136,6 @@ const App = () => {
     </div>
   );
   
-  return isLoggedIn ? <LoginPage onLogin={handleLogin} /> : <AppContent />;
+  return isLoggedIn ? <AppContent /> : <LoginPage onLogin={handleLogin} error={error} />;
 };
 export default App;

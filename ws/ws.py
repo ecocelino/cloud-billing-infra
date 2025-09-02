@@ -7,6 +7,7 @@ import sys
 from mysql.connector import pooling
 import pandas as pd
 import io
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # --- Main App Definition ---
 app = Flask(__name__)
@@ -37,36 +38,54 @@ def wait_for_db():
 def setup_database():
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, username VARCHAR(255) NOT NULL UNIQUE, password_hash VARCHAR(255) NOT NULL)")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS projects (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            project_name VARCHAR(255) NOT NULL UNIQUE,
-            project_code VARCHAR(255),
-            environment VARCHAR(255),
-            owner VARCHAR(255),
-            team VARCHAR(255)
+            id INT AUTO_INCREMENT PRIMARY KEY, project_name VARCHAR(255) NOT NULL UNIQUE,
+            project_code VARCHAR(255), environment VARCHAR(255), owner VARCHAR(255), team VARCHAR(255)
         )
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS monthly_service_costs (
-            id INT AUTO_INCREMENT PRIMARY KEY, 
-            project_id INT NOT NULL, 
-            billing_year INT NOT NULL, 
-            billing_month VARCHAR(10) NOT NULL, 
-            platform VARCHAR(10) NOT NULL, 
-            service_description VARCHAR(255), 
-            sku_description VARCHAR(255), 
-            type VARCHAR(255), 
-            cost DECIMAL(10,2) DEFAULT 0.00, 
-            FOREIGN KEY (project_id) REFERENCES projects(id)
+            id INT AUTO_INCREMENT PRIMARY KEY, project_id INT NOT NULL, billing_year INT NOT NULL, 
+            billing_month VARCHAR(10) NOT NULL, platform VARCHAR(10) NOT NULL, 
+            service_description VARCHAR(255), sku_description VARCHAR(255), type VARCHAR(255), 
+            cost DECIMAL(10,2) DEFAULT 0.00, FOREIGN KEY (project_id) REFERENCES projects(id)
         )
     """)
+    
+    cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+    if not cursor.fetchone():
+        hashed_password = generate_password_hash('password', method='pbkdf2:sha256')
+        cursor.execute("INSERT INTO users (username, password_hash) VALUES (%s, %s)", ('admin', hashed_password))
+        print("Default admin user created.", file=sys.stderr)
+
     conn.commit()
     cursor.close()
     conn.close()
 
-# --- API Routes (Now Complete) ---
+# --- API Routes ---
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
 
+    if not username or not password:
+        return jsonify({'error': 'Username and password are required'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+    user = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if user and check_password_hash(user['password_hash'], password):
+        return jsonify({'message': 'Login successful'}), 200
+    else:
+        return jsonify({'error': 'Invalid username or password'}), 401
+        
 @app.route('/api/projects/meta/all', methods=['GET'])
 def get_all_project_meta():
     conn = get_db_connection()
@@ -76,12 +95,8 @@ def get_all_project_meta():
     cursor.close()
     conn.close()
     meta = { 
-        r['project_name']: { 
-            'projectCode': r['project_code'] or '', 
-            'environment': r['environment'] or '',
-            'owner': r['owner'] or '',
-            'team': r['team'] or ''
-        } for r in results 
+        r['project_name']: { 'projectCode': r['project_code'] or '', 'environment': r['environment'] or '', 'owner': r['owner'] or '', 'team': r['team'] or '' } 
+        for r in results 
     }
     return jsonify(meta)
 
@@ -93,14 +108,9 @@ def update_project_meta():
     environment = data.get('environment')
     owner = data.get('owner')
     team = data.get('team')
-    if not project_name:
-        return jsonify({'error': 'Missing project_name'}), 400
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE projects SET project_code = %s, environment = %s, owner = %s, team = %s WHERE project_name = %s", 
-        (project_code, environment, owner, team, project_name)
-    )
+    cursor.execute("UPDATE projects SET project_code = %s, environment = %s, owner = %s, team = %s WHERE project_name = %s", (project_code, environment, owner, team, project_name))
     conn.commit()
     cursor.close()
     conn.close()
@@ -110,44 +120,27 @@ def update_project_meta():
 def upload_billing_csv():
     if 'file' not in request.files or 'month' not in request.form or 'platform' not in request.form or 'year' not in request.form:
         return jsonify({'error': 'File, month, year, or platform parameter is missing'}), 400
-    
     file = request.files['file']
     month = request.form['month']
     platform = request.form['platform']
     year = int(request.form['year'])
-
     conn = get_db_connection()
     cursor = conn.cursor()
-
     try:
         content = file.read().decode('utf-8')
         df = pd.read_csv(io.StringIO(content))
-
         df.columns = [col.strip().lower() for col in df.columns]
-        
         cost_col_name = 'cost ($)' if 'cost ($)' in df.columns else 'cost'
-        
-        required_cols = {'project name'}
-        if not required_cols.issubset(df.columns) or not cost_col_name:
+        if 'project name' not in df.columns or not cost_col_name:
             return jsonify({'error': "CSV must contain 'Project name' and 'Cost' or 'Cost ($)' columns."}), 400
-
-        print(f"Deleting existing data for {month.capitalize()} {year} on platform {platform}...", file=sys.stderr)
-        cursor.execute(
-            "DELETE FROM monthly_service_costs WHERE billing_year = %s AND billing_month = %s AND platform = %s",
-            (year, month, platform)
-        )
-        print(f"Existing data for {month.capitalize()} {year} deleted.", file=sys.stderr)
+        
+        cursor.execute("DELETE FROM monthly_service_costs WHERE billing_year = %s AND billing_month = %s AND platform = %s", (year, month, platform))
         
         items_added = 0
-        print(f"Processing {len(df)} rows for {month.capitalize()} {year}...", file=sys.stderr)
-
         for index, row in df.iterrows():
             project_name = row.get('project name')
             cost = row.get(cost_col_name)
-
-            if pd.isna(project_name) or pd.isna(cost) or cost <= 0:
-                continue
-
+            if pd.isna(project_name) or pd.isna(cost) or cost <= 0: continue
             cursor.execute("SELECT id FROM projects WHERE project_name = %s", (project_name,))
             project = cursor.fetchone()
             if not project:
@@ -155,34 +148,18 @@ def upload_billing_csv():
                 project_id = cursor.lastrowid
             else:
                 project_id = project[0]
-
             cursor.execute(
-                """
-                INSERT INTO monthly_service_costs 
-                (project_id, billing_year, billing_month, platform, service_description, sku_description, type, cost)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                """,
-                (
-                    project_id, year, month, platform,
-                    row.get('service description'),
-                    row.get('sku description'),
-                    row.get('type'),
-                    cost
-                )
+                "INSERT INTO monthly_service_costs (project_id, billing_year, billing_month, platform, service_description, sku_description, type, cost) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (project_id, year, month, platform, row.get('service description'), row.get('sku description'), row.get('type'), cost)
             )
             items_added += 1
-
         conn.commit()
         
-        print(f"Successfully added {items_added} items to the database.", file=sys.stderr)
         if items_added == 0:
             return jsonify({'message': 'File processed, but no new data with cost > 0 was found to add.'}), 200
-
         return jsonify({'message': f"Successfully added {items_added} billing items for {month.capitalize()} {year}."}), 200
-
     except Exception as e:
         conn.rollback()
-        print(f"An error occurred: {str(e)}", file=sys.stderr)
         return jsonify({'error': f'Failed to process file: {str(e)}'}), 500
     finally:
         cursor.close()

@@ -42,6 +42,7 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
           team: meta.team || ''
         })
       });
+    // FIX: Added missing curly braces to the catch block
     } catch (err) {
       console.error("Failed to save project metadata", err);
     }
@@ -140,14 +141,14 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
                             <ul className="list-disc pl-5 space-y-2">
                                 {project.service_breakdown
                                 .filter(service => service.billing_month === selectedMonth && parseFloat(service.cost || 0) > 0)
-                                .sort((a, b) => b.cost - a.cost)
+                                .sort((a, b) => parseFloat(b.cost || 0) - parseFloat(a.cost || 0))
                                 .map((service, idx) => (
                                     <li key={`${service.service_description}-${idx}`} className="flex justify-between items-center">
                                         <div>
                                             <span className="font-medium text-gray-800">{service.service_description || service.type || 'Unknown Service'}</span>
                                             {service.sku_description && <span className="ml-2 text-sm text-gray-500">SKU: {service.sku_description}</span>}
                                         </div>
-                                        <span className="font-medium text-green-600">{formatCurrency(service.cost)}</span>
+                                        <span className="font-medium text-green-600">{formatCurrency(parseFloat(service.cost || 0))}</span>
                                     </li>
                                 ))}
                             </ul>
