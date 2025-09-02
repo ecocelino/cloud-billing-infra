@@ -13,3 +13,34 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* Add this to your index.css file */
+@media print {
+  /* Hide everything on the page by default when printing */
+  body * {
+    visibility: hidden;
+  }
+  
+  /* Make only the table and its contents visible for printing */
+  .printable-area, .printable-area * {
+    visibility: visible;
+  }
+
+  /* Ensure the table takes up the full page */
+  .printable-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
+
+/* A helper class to hide elements from printing */
+.no-print {
+    display: block; /* or your default display type */
+}
+@media print {
+    .no-print {
+        display: none !important;
+    }
+}
