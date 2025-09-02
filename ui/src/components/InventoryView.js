@@ -1,0 +1,28 @@
+import React from 'react';
+import { Plus, Trash2, FileUp } from 'lucide-react';
+import { formatCurrency, getIcon } from '../utils'; // <-- UPDATED IMPORT
+
+const InventoryView = ({ platformFilter, newResource, handleInputChange, handleAddResource, handleFileUpload, sortedInventory, handleDeleteResource, error, loading }) => (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-xl shadow-lg">
+        <h3 className="text-2xl font-semibold text-gray-800 mb-4">Add New Resource</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {platformFilter !== 'all' && (<label htmlFor="csv-upload" className="flex items-center justify-center space-x-2 bg-slate-100 text-slate-700 font-medium py-3 px-4 rounded-lg cursor-pointer hover:bg-slate-200 transition-colors md:col-span-3"><FileUp size={20} /><span>Upload {platformFilter} Inventory Report</span></label>)}
+          <input id="csv-upload" type="file" accept=".csv" onChange={(e) => handleFileUpload(e, platformFilter)} className="hidden" />
+          <input type="text" name="project_name" placeholder="Project/Client Name" value={newResource.project_name} onChange={handleInputChange} className="p-3 border border-gray-300 rounded-lg" />
+          {platformFilter === 'AWS' && (<> <input type="text" name="awsAccount" placeholder="AWS Account ID" value={newResource.awsAccount} onChange={handleInputChange} className="p-3 border border-gray-300 rounded-lg" /> <input type="text" name="awsAccountAlias" placeholder="Account Alias" value={newResource.awsAccountAlias} onChange={handleInputChange} className="p-3 border border-gray-300 rounded-lg" /> <input type="text" name="region" placeholder="AWS Region" value={newResource.region} onChange={handleInputChange} className="p-3 border border-gray-300 rounded-lg" /> </>)}
+          <input type="text" name="type" placeholder="Resource Type (e.g., EC2, S3)" value={newResource.type} onChange={handleInputChange} className="p-3 border border-gray-300 rounded-lg" />
+          <input type="text" name="name" placeholder="Resource Name" value={newResource.name} onChange={handleInputChange} className="p-3 border border-gray-300 rounded-lg" />
+          <input type="number" name="cost" placeholder="Monthly Cost ($)" value={newResource.cost} onChange={handleInputChange} className="p-3 border border-gray-300 rounded-lg" />
+          <button onClick={handleAddResource} className="flex items-center justify-center space-x-2 bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700"><Plus size={20} /><span>Add Resource</span></button>
+        </div>
+         {error && <p className="mt-2 text-sm text-red-500 text-center">{error}</p>}
+      </div>
+       <div className="bg-white p-6 rounded-xl shadow-lg">
+        <h3 className="text-2xl font-semibold text-gray-800 mb-4">Full Inventory List</h3>
+        <div className="overflow-x-auto">{loading ? (<p className="text-center text-gray-500 py-8">Loading inventory...</p>) : (<table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project</th><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Region</th><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{sortedInventory.map(resource => (<tr key={`${resource.platform}-${resource.id}`}><td className="px-6 py-4 whitespace-nowrap text-gray-700">{resource.project_name}</td><td className="px-6 py-4 whitespace-nowrap text-gray-700">{resource.awsAccountAlias || 'N/A'} ({resource.awsAccount || 'N/A'})</td><td className="px-6 py-4 whitespace-nowrap"><div className="flex items-center">{getIcon(resource.type)}<span className="ml-2 font-medium text-gray-900">{resource.type}</span></div></td><td className="px-6 py-4 whitespace-nowrap text-gray-700">{resource.name}</td><td className="px-6 py-4 whitespace-nowrap text-gray-700">{resource.region || 'N/A'}</td><td className="px-6 py-4 whitespace-nowrap text-green-600 font-bold">{formatCurrency(resource.cost)}</td><td className="px-6 py-4 whitespace-nowrap"><span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${resource.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{resource.status}</span></td><td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><button onClick={() => handleDeleteResource(resource.id, resource.platform)} className="text-red-500 hover:text-red-700"><Trash2 size={20} /></button></td></tr>))}</tbody></table>)}</div>
+      </div>
+    </div>
+);
+
+export default InventoryView;
