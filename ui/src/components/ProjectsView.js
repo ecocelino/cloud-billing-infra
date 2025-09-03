@@ -6,20 +6,21 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const years = [2023, 2024, 2025, 2026, 2027];
 
-const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
+const ProjectsView = ({ yearlyData = [], selectedYear, setSelectedYear, envFilter, userRole, token }) => {
   const [editingProject, setEditingProject] = useState(null);
   const [projectMeta, setProjectMeta] = useState({});
   const [expandedProjects, setExpandedProjects] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedMonth, setSelectedMonth] = useState('');
-  const [selectedYear, setSelectedYear] = useState(initialYear);
 
   useEffect(() => {
     const fetchMeta = async () => {
         try {
-            const metaResponse = await fetch(`${API_BASE_URL}/projects/meta/all`);
-            if (metaResponse.ok) {
-                setProjectMeta(await metaResponse.json());
+            const response = await fetch(`${API_BASE_URL}/projects/meta/all`, {
+                headers: { 'x-access-token': token }
+            });
+            if (response.ok) {
+                setProjectMeta(await response.json());
             }
         } catch (err) {
             console.error("Failed to fetch project metadata", err);
@@ -28,14 +29,17 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
     if (yearlyData.length > 0) {
         fetchMeta();
     }
-  }, [yearlyData]);
+  }, [yearlyData, token]);
 
   const saveProjectMeta = async (projectName) => {
     const meta = projectMeta[projectName] || {};
     try {
       await fetch(`${API_BASE_URL}/projects/meta`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+            'Content-Type': 'application/json',
+            'x-access-token': token
+        },
         body: JSON.stringify({
           project_name: projectName,
           project_code: meta.projectCode || '',
@@ -70,7 +74,7 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
             );
         });
     }
-    // MODIFIED: Hide projects with 0 cost for the selected month
+    
     if (selectedMonth) {
         return filtered.filter(p => (p[`${selectedMonth}_cost`] || 0) > 0);
     }
@@ -109,7 +113,7 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
       
       {!selectedMonth ? (
         <div className="text-center py-10 text-gray-500">
-          Please select a month to view project data.
+          Please select a month to view project data for the year {selectedYear}.
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -123,7 +127,9 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Team</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Cost ({selectedMonth.toUpperCase()})</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                {(userRole === 'admin' || userRole === 'superuser') && (
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -134,7 +140,7 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
                       <td className="px-6 py-4 whitespace-nowrap font-medium">{project.project_name}</td>
                       {['projectCode', 'environment', 'owner', 'team'].map(field => (
                           <td key={field} className="px-6 py-4 whitespace-nowrap">
-                            {editingProject === project.project_name ? (
+                            {editingProject === project.project_name && (userRole === 'admin' || userRole === 'superuser') ? (
                               <input type="text" value={projectMeta[project.project_name]?.[field] || ''} onClick={e => e.stopPropagation()} onChange={e => setProjectMeta(meta => ({ ...meta, [project.project_name]: { ...meta[project.project_name], [field]: e.target.value } }))} placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace('Code', ' Code')} className="p-1 border border-gray-300 rounded w-24"/>
                             ) : (
                               <span>{projectMeta[project.project_name]?.[field] || ''}</span>
@@ -142,29 +148,33 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
                           </td>
                       ))}
                       <td className="px-6 py-4 whitespace-nowrap font-bold text-green-600">{formatCurrency(project[`${selectedMonth}_cost`] || 0)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                         {editingProject === project.project_name ? ( <button className="px-2 py-1 bg-green-600 text-white rounded" onClick={async e => { e.stopPropagation(); await saveProjectMeta(project.project_name); setEditingProject(null); }}>Save</button> ) : ( <button className="px-2 py-1 bg-blue-600 text-white rounded" onClick={e => { e.stopPropagation(); setEditingProject(project.project_name); }}>Edit</button> )}
-                      </td>
+                      {(userRole === 'admin' || userRole === 'superuser') && (
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {editingProject === project.project_name ? ( <button className="px-2 py-1 bg-green-600 text-white rounded" onClick={async e => { e.stopPropagation(); await saveProjectMeta(project.project_name); setEditingProject(null); }}>Save</button> ) : ( <button className="px-2 py-1 bg-blue-600 text-white rounded" onClick={e => { e.stopPropagation(); setEditingProject(project.project_name); }}>Edit</button> )}
+                        </td>
+                      )}
                     </tr>
                     {expandedProjects[project.project_name] && (
                       <tr>
-                        <td colSpan="8" className="p-4 bg-slate-50">
-                          <div className="px-8">
-                              <h4 className="font-semibold text-gray-700 mb-2">Service Breakdown:</h4>
-                              <ul className="list-disc pl-5 space-y-2">
-                                  {project.service_breakdown
-                                  .filter(service => service.billing_month === selectedMonth && parseFloat(service.cost || 0) > 0)
-                                  .sort((a, b) => parseFloat(b.cost || 0) - parseFloat(a.cost || 0))
-                                  .map((service, idx) => (
-                                      <li key={`${service.service_description}-${idx}`} className="flex justify-between items-center">
-                                          <div>
-                                              <span className="font-medium text-gray-800">{service.service_description || service.type || 'Unknown Service'}</span>
-                                              {service.sku_description && <span className="ml-2 text-sm text-gray-500">SKU: {service.sku_description}</span>}
-                                          </div>
-                                          <span className="font-medium text-green-600">{formatCurrency(parseFloat(service.cost || 0))}</span>
-                                      </li>
-                                  ))}
-                              </ul>
+                        <td colSpan={ (userRole === 'admin' || userRole === 'superuser') ? 8 : 7}>
+                          <div className="p-4 bg-slate-50">
+                            <div className="px-8">
+                                <h4 className="font-semibold text-gray-700 mb-2">Service Breakdown:</h4>
+                                <ul className="list-disc pl-5 space-y-1">
+                                    {project.service_breakdown
+                                    .filter(service => service.billing_month === selectedMonth && parseFloat(service.cost || 0) > 0)
+                                    .sort((a, b) => parseFloat(b.cost || 0) - parseFloat(a.cost || 0))
+                                    .map((service, idx) => (
+                                        <li key={`${service.service_description}-${idx}`} className="flex justify-between">
+                                            <div>
+                                                <span className="font-medium text-gray-800">{service.service_description || service.type || 'Unknown Service'}</span>
+                                                {service.sku_description && <span className="ml-2 text-sm text-gray-500">SKU: {service.sku_description}</span>}
+                                            </div>
+                                            <span className="font-medium text-green-600">{formatCurrency(parseFloat(service.cost || 0))}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -174,7 +184,7 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
               <tr className="bg-gray-100 font-bold">
                 <td colSpan="6" className="px-6 py-4 text-right text-gray-800">Grand Total</td>
                 <td className="px-6 py-4 text-green-800 font-extrabold">{formatCurrency(grandTotal)}</td>
-                <td></td>
+                {(userRole === 'admin' || userRole === 'superuser') && <td></td>}
               </tr>
             </tbody>
           </table>
@@ -184,3 +194,4 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
   );
 };
 export default ProjectsView;
+

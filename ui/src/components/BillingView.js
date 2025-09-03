@@ -6,7 +6,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const years = [2023, 2024, 2025, 2026, 2027];
 
-const BillingView = ({ billingData = [], selectedYear, setSelectedYear, platformFilter }) => {
+const BillingView = ({ billingData = [], selectedYear, setSelectedYear, platformFilter, userRole, token }) => {
   const [uploadFile, setUploadFile] = useState(null);
   const [selectedMonthUpload, setSelectedMonthUpload] = useState('');
   const [selectedYearUpload, setSelectedYearUpload] = useState(new Date().getFullYear());
@@ -29,7 +29,11 @@ const BillingView = ({ billingData = [], selectedYear, setSelectedYear, platform
     formData.append('platform', platformFilter);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/billing/upload_csv`, { method: 'POST', body: formData });
+      const response = await fetch(`${API_BASE_URL}/billing/upload_csv`, { 
+        method: 'POST', 
+        headers: { 'x-access-token': token },
+        body: formData 
+      });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
       setUploadStatus(`${result.message} Page will refresh shortly.`);
@@ -52,23 +56,25 @@ const BillingView = ({ billingData = [], selectedYear, setSelectedYear, platform
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-lg">
-        <h3 className="text-2xl font-semibold text-gray-800 mb-4">Upload Monthly Billing Report</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
-          <input id="billing-file-input" type="file" accept=".csv" onChange={(e) => setUploadFile(e.target.files[0])} className="md:col-span-1 block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
-          <select value={selectedMonthUpload} onChange={(e) => setSelectedMonthUpload(e.target.value)} className="p-3 border border-gray-300 rounded-lg">
-            <option value="">Choose...</option>
-            {months.map(m => <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
-          </select>
-          <select value={selectedYearUpload} onChange={(e) => setSelectedYearUpload(parseInt(e.target.value))} className="p-3 border border-gray-300 rounded-lg">
-            {years.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <button onClick={handleBillingUpload} disabled={platformFilter === 'all' || !platformFilter} className="flex items-center justify-center space-x-2 bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400">
-            <FileUp size={20}/><span>Upload for {platformFilter}</span>
-          </button>
+      {(userRole === 'admin' || userRole === 'superuser') && (
+        <div className="bg-white p-6 rounded-xl shadow-lg">
+          <h3 className="text-2xl font-semibold text-gray-800 mb-4">Upload Monthly Billing Report</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+            <input id="billing-file-input" type="file" accept=".csv" onChange={(e) => setUploadFile(e.target.files[0])} className="md:col-span-1 block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+            <select value={selectedMonthUpload} onChange={(e) => setSelectedMonthUpload(e.target.value)} className="p-3 border border-gray-300 rounded-lg">
+              <option value="">Choose...</option>
+              {months.map(m => <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
+            </select>
+            <select value={selectedYearUpload} onChange={(e) => setSelectedYearUpload(parseInt(e.target.value))} className="p-3 border border-gray-300 rounded-lg">
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <button onClick={handleBillingUpload} disabled={platformFilter === 'all' || !platformFilter} className="flex items-center justify-center space-x-2 bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400">
+              <FileUp size={20}/><span>Upload for {platformFilter}</span>
+            </button>
+          </div>
+          {uploadStatus && <p className="mt-4 text-center text-sm text-gray-600">{uploadStatus}</p>}
         </div>
-        {uploadStatus && <p className="mt-4 text-center text-sm text-gray-600">{uploadStatus}</p>}
-      </div>
+      )}
 
       <div className="bg-white p-6 rounded-xl shadow-lg">
         <div className="flex justify-between items-center mb-4">
@@ -97,7 +103,7 @@ const BillingView = ({ billingData = [], selectedYear, setSelectedYear, platform
                 <tr key={row.project_name}>
                   <td className="px-6 py-4 whitespace-nowrap font-medium">{row.project_name}</td>
                   {months.map(month => (
-                    <td key={month} className={`px-6 py-4 whitespace-nowrap transition-colors`}>
+                    <td key={month} className="px-6 py-4 whitespace-nowrap transition-colors">
                         {formatCurrency(row[`${month}_cost`] || 0)}
                     </td>
                   ))}
@@ -113,3 +119,4 @@ const BillingView = ({ billingData = [], selectedYear, setSelectedYear, platform
 };
 
 export default BillingView;
+

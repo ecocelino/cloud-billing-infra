@@ -2,3 +2,5 @@ Flask
 Flask-CORS
 mysql-connector-python
 pandas
+werkzeug
+PyJWT

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut, Filter } from 'lucide-react';
+import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut, Settings, Filter } from 'lucide-react';
 import './index.css';
 import LoginPage from './components/LoginPage.js';
 import DashboardView from './components/DashboardView.js';
 import ProjectsView from './components/ProjectsView.js';
 import BillingView from './components/BillingView.js';
+import SettingsView from './components/SettingsView.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -12,21 +13,27 @@ if (!API_BASE_URL) {
   throw new Error("FATAL ERROR: REACT_APP_API_URL is not defined. Please check your .env file and restart your containers.");
 }
 
-const useYearlyBillingData = (platform, year) => {
+const useYearlyBillingData = (platform, year, token) => {
   const [processedData, setProcessedData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchDataAndProcess = async () => {
-      if (!platform || !year || platform === 'all') {
+      if (!platform || !year || !token) {
         setProcessedData([]);
         setIsLoading(false);
         return;
       }
       setIsLoading(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/billing/services?platform=${platform}&year=${year}`);
-        const rawData = await response.json();
+        const [billingResponse, metaResponse] = await Promise.all([
+            fetch(`${API_BASE_URL}/billing/services?platform=${platform}&year=${year}`, { headers: { 'x-access-token': token } }),
+            fetch(`${API_BASE_URL}/projects/meta/all`, { headers: { 'x-access-token': token } })
+        ]);
+
+        const rawData = await billingResponse.json();
+        const metaData = await metaResponse.json();
+        
         if (!Array.isArray(rawData)) {
             setProcessedData([]);
             return;
@@ -69,7 +76,17 @@ const useYearlyBillingData = (platform, year) => {
             }
         });
         
-        setProcessedData(Object.values(projects));
+        const finalData = Object.values(projects);
+
+        finalData.forEach(project => {
+            if (metaData[project.project_name]) {
+                project.project_code = metaData[project.project_name].projectCode;
+            } else {
+                project.project_code = '';
+            }
+        });
+
+        setProcessedData(finalData);
 
       } catch (error) {
         console.error("Failed to process billing data:", error);
@@ -79,7 +96,7 @@ const useYearlyBillingData = (platform, year) => {
       }
     };
     fetchDataAndProcess();
-  }, [platform, year]);
+  }, [platform, year, token]);
 
   return { yearlyBillingData: processedData, isBillingLoading: isLoading };
 };
@@ -87,18 +104,42 @@ const useYearlyBillingData = (platform, year) => {
 
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [token, setToken] = useState("dummy-token"); // Using a dummy token for dev to bypass login
+  const [userRole, setUserRole] = useState("superuser"); // Default to superuser for dev
   const [view, setView] = useState('dashboard');
   const [platformFilter, setPlatformFilter] = useState('GCP');
   const [envFilter, setEnvFilter] = useState('all');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const { yearlyBillingData, isBillingLoading } = useYearlyBillingData(platformFilter, selectedYear);
+  const [error, setError] = useState('');
+  const { yearlyBillingData, isBillingLoading } = useYearlyBillingData(platformFilter, selectedYear, token);
   
-  const handleLogin = (username, password) => {
-    if (username === 'admin' && password === 'password') {
-      setIsLoggedIn(true);
+  const handleLogin = async (username, password) => {
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setToken(data.token);
+        setUserRole(data.role);
+        setIsLoggedIn(true);
+      } else {
+        const result = await response.json();
+        setError(result.error || 'Invalid username or password.');
+      }
+    } catch (err) {
+      setError('Login failed. Please ensure the backend is running.');
     }
   };
-  const handleLogout = () => { setIsLoggedIn(false); };
+  
+  const handleLogout = () => {
+    setToken(null);
+    setUserRole(null); 
+    setIsLoggedIn(false); 
+  };
   
   const AppContent = () => (
     <div className="flex min-h-screen bg-slate-100 font-sans">
@@ -111,6 +152,9 @@ const App = () => {
           <button onClick={() => setView('dashboard')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'dashboard' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><LayoutDashboard size={20} /><span>Dashboard</span></button>
           <button onClick={() => setView('projects')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'projects' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><FolderOpen size={20} /><span>Projects</span></button>
           <button onClick={() => setView('billing')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'billing' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><BarChart3 size={20} /><span>Billing</span></button>
+          {(userRole === 'admin' || userRole === 'superuser') && (
+            <button onClick={() => setView('settings')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'settings' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><Settings size={20} /><span>Settings</span></button>
+          )}
         </div>
         <button onClick={handleLogout} className="mt-auto flex items-center space-x-3 px-3 py-2 rounded-lg font-medium text-gray-700 hover:bg-red-100 hover:text-red-600"><LogOut size={20} /><span>Logout</span></button>
       </nav>
@@ -131,15 +175,21 @@ const App = () => {
         </header>
 
         <main>
-          {isBillingLoading && <div className="text-center p-10 font-semibold text-gray-500">Loading Billing Data...</div>}
+          {isBillingLoading && view !== 'settings' && <div className="text-center p-10 font-semibold text-gray-500">Loading Billing Data...</div>}
+          
           {!isBillingLoading && view === 'dashboard' && <DashboardView inventory={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} />}
-          {!isBillingLoading && view === 'projects' && <ProjectsView yearlyData={yearlyBillingData} initialYear={selectedYear} envFilter={envFilter} />}
-          {!isBillingLoading && view === 'billing' && <BillingView billingData={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} platformFilter={platformFilter}/>}
+          
+          {!isBillingLoading && view === 'projects' && <ProjectsView yearlyData={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} envFilter={envFilter} userRole={userRole} token={token} />}
+          
+          {!isBillingLoading && view === 'billing' && <BillingView billingData={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} platformFilter={platformFilter} userRole={userRole} token={token}/>}
+          
+          {view === 'settings' && <SettingsView token={token} currentUserRole={userRole} />}
         </main>
       </div>
     </div>
   );
   
-  return isLoggedIn ? <AppContent /> : <LoginPage onLogin={handleLogin} />;
+  return isLoggedIn ? <AppContent /> : <LoginPage onLogin={handleLogin} error={error} />;
 };
 export default App;
+

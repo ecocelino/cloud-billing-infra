@@ -15,7 +15,6 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
     const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
     const [projectSearchTerm, setProjectSearchTerm] = useState('');
     const [mainChartView, setMainChartView] = useState('bar');
-    const [monthlyBreakdown, setMonthlyBreakdown] = useState('service');
     const dropdownRef = useRef(null);
 
     const projectNames = useMemo(() =>
@@ -71,8 +70,12 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
     const topProjectStat = useMemo(() => {
         const [name = 'N/A', cost = 0] = Object.entries(projectCosts)
             .reduce((max, entry) => (entry[1] > max[1] ? entry : max), ['', 0]);
-        return { name, cost };
-    }, [projectCosts]);
+        
+        const projectDetails = inventory.find(p => p.project_name === name);
+        const code = projectDetails ? projectDetails.project_code : '';
+
+        return { name, cost, code };
+    }, [projectCosts, inventory]);
 
     const serviceBreakdown = useMemo(() => {
         const services = {};
@@ -115,24 +118,11 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
     
     const barData = useMemo(() => {
         if (selectedMonth !== 'all') {
-            if (monthlyBreakdown === 'service') {
-                const topServices = serviceBreakdown.slice(0, 15);
-                return {
-                    labels: topServices.map(s => s.name),
-                    datasets: [{ label: `Cost for ${selectedMonth.toUpperCase()}`, data: topServices.map(s => s.totalCost), backgroundColor: colorPalette[1] }],
-                };
-            }
-            if (monthlyBreakdown === 'project') {
-                const projectsWithCost = Object.entries(projectCosts).filter(([, cost]) => cost > 0).map(([name, cost]) => ({ name, cost }));
-                return {
-                    labels: [selectedMonth.charAt(0).toUpperCase() + selectedMonth.slice(1)],
-                    datasets: projectsWithCost.map((proj, index) => ({
-                        label: proj.name,
-                        data: [proj.cost],
-                        backgroundColor: colorPalette[index % colorPalette.length],
-                    })),
-                };
-            }
+            const topServices = serviceBreakdown.slice(0, 20);
+            return {
+                labels: topServices.map(s => s.name),
+                datasets: [{ label: `Cost for ${selectedMonth.toUpperCase()}`, data: topServices.map(s => s.totalCost), backgroundColor: colorPalette[1] }],
+            };
         }
         if (selectedProjects.length === 1) {
             const project = filteredInventory[0];
@@ -169,10 +159,10 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
             labels: months.map(m => m.charAt(0).toUpperCase() + m.slice(1)),
             datasets: [{ label: `Total Monthly Cost`, data: months.map(m => monthlyCosts[m]), backgroundColor: colorPalette[0] }],
         };
-    }, [filteredInventory, selectedProjects, inventory, selectedMonth, serviceBreakdown, projectCosts, monthlyBreakdown]);
-
+    }, [filteredInventory, selectedProjects, inventory, selectedMonth, serviceBreakdown]);
+    
     const pieData = useMemo(() => {
-        const dataSet = mainChartView === 'pie' ? serviceBreakdown : Object.entries(projectCosts).map(([name, cost])=>({name, totalCost:cost}));
+        const dataSet = (selectedProjects.length === 1 || selectedMonth !== 'all') ? serviceBreakdown : Object.entries(projectCosts).map(([name, cost])=>({name, totalCost:cost}));
         const sortedData = dataSet.sort((a, b) => b.totalCost - a.totalCost);
         const topN = 7;
         const topItems = sortedData.slice(0, topN);
@@ -187,12 +177,12 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
             labels,
             datasets: [{ data, backgroundColor: colorPalette, borderColor: '#ffffff', borderWidth: 2 }]
         };
-    }, [projectCosts, serviceBreakdown, mainChartView]);
+    }, [projectCosts, serviceBreakdown, selectedProjects, selectedMonth]);
 
     const barOptions = useMemo(() => ({
         responsive: true, maintainAspectRatio: false,
         plugins: { 
-            legend: { display: selectedProjects.length !== 0 || selectedMonth !== 'all' },
+            legend: { display: selectedProjects.length !== 0 },
             tooltip: { callbacks: { 
                 label: (context) => `${context.dataset.label || ''}: ${formatCurrency(context.parsed.y)}`,
                 footer: (tooltipItems) => {
@@ -203,12 +193,12 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
             }}
         },
         scales: { 
-            x: { stacked: true },
-            y: { stacked: true, beginAtZero: true, ticks: { callback: value => formatCurrency(value) } }
+            x: { stacked: selectedProjects.length === 1 && selectedMonth === 'all' },
+            y: { stacked: selectedProjects.length === 1 && selectedMonth === 'all', beginAtZero: true, ticks: { callback: value => formatCurrency(value) } }
         }
     }), [selectedProjects, selectedMonth]);
     
-    const pieOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } };
+    const pieOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, title: { display: true } } };
 
     return (
         <div className="space-y-6">
@@ -232,7 +222,8 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
                     <Target size={40} className="text-indigo-500 mb-2 mx-auto" />
                     <h3 className="text-xl font-semibold text-gray-800">Top Project</h3>
                     <p className="text-lg font-bold text-gray-900 mt-1 truncate" title={topProjectStat.name}>{topProjectStat.name}</p>
-                    <p className="text-sm text-gray-500">{formatCurrency(topProjectStat.cost)}</p>
+                    <p className="text-sm text-gray-500 font-mono">{topProjectStat.code || 'N/A'}</p>
+                    <p className="text-lg font-semibold text-gray-700 mt-2">{formatCurrency(topProjectStat.cost)}</p>
                 </div>
             </div>
             
@@ -263,12 +254,12 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                <div className={`bg-white p-6 rounded-xl shadow-lg ${selectedProjects.length === 1 && selectedMonth === 'all' ? 'lg:col-span-5' : 'lg:col-span-3'}`}>
+                <div className={`bg-white p-6 rounded-xl shadow-lg ${selectedProjects.length === 1 ? 'lg:col-span-5' : 'lg:col-span-3'}`}>
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-lg font-semibold text-gray-800">
-                            {selectedMonth !== 'all' ? `Costs for ${selectedMonth.toUpperCase()}` : (selectedProjects.length === 1 ? `Service Breakdown for ${selectedProjects[0]}`: (mainChartView === 'pie' ? 'Service Cost Breakdown' : 'Monthly Cost Breakdown'))}
+                            {selectedMonth !== 'all' ? `Top Services for ${selectedMonth.toUpperCase()}` : (selectedProjects.length === 1 ? `Service Breakdown for ${selectedProjects[0]}`: (mainChartView === 'pie' ? 'Service Cost Breakdown' : 'Monthly Cost Breakdown'))}
                         </h3>
-                        {(selectedMonth !== 'all' || selectedProjects.length === 1) && (
+                        {selectedProjects.length === 1 && (
                             <div className="flex justify-center bg-gray-100 p-1 rounded-lg">
                                 <button onClick={() => setMainChartView('bar')} className={`px-3 py-1 text-sm font-semibold rounded-md flex items-center gap-2 ${mainChartView === 'bar' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChartHorizontal size={16} />Bar</button>
                                 <button onClick={() => setMainChartView('pie')} className={`px-3 py-1 text-sm font-semibold rounded-md flex items-center gap-2 ${mainChartView === 'pie' ? 'bg-white shadow' : 'text-gray-600'}`}><PieChart size={16} />Pie</button>
@@ -276,8 +267,8 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
                         )}
                     </div>
                     <div className="h-96 relative">
-                        {mainChartView === 'bar' && <Bar data={barData} options={barOptions} />}
-                        {mainChartView === 'pie' && <Pie data={pieData} options={{...pieOptions, plugins: {...pieOptions.plugins, title: {display: true, text: 'Cost Breakdown by Service'}}}} />}
+                        { mainChartView === 'bar' && <Bar data={barData} options={barOptions} /> }
+                        { mainChartView === 'pie' && <Pie data={pieData} options={{...pieOptions, plugins: {...pieOptions.plugins, title: {display: true, text: `Cost Breakdown by ${selectedProjects.length === 1 ? 'Service' : 'Project'}`}}}} /> }
                     </div>
                 </div>
                 
@@ -306,3 +297,4 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
     );
 };
 export default DashboardView;
+
