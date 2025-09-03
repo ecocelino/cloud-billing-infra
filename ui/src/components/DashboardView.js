@@ -207,7 +207,7 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
             y: { stacked: true, beginAtZero: true, ticks: { callback: value => formatCurrency(value) } }
         }
     }), [selectedProjects, selectedMonth]);
-
+    
     const pieOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } };
 
     return (
@@ -263,22 +263,17 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                <div className={`bg-white p-6 rounded-xl shadow-lg ${selectedProjects.length === 1 ? 'lg:col-span-5' : 'lg:col-span-3'}`}>
+                <div className={`bg-white p-6 rounded-xl shadow-lg ${selectedProjects.length === 1 && selectedMonth === 'all' ? 'lg:col-span-5' : 'lg:col-span-3'}`}>
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-lg font-semibold text-gray-800">
                             {selectedMonth !== 'all' ? `Costs for ${selectedMonth.toUpperCase()}` : (selectedProjects.length === 1 ? `Service Breakdown for ${selectedProjects[0]}`: (mainChartView === 'pie' ? 'Service Cost Breakdown' : 'Monthly Cost Breakdown'))}
                         </h3>
-                        {selectedMonth !== 'all' ? (
+                        {(selectedMonth !== 'all' || selectedProjects.length === 1) && (
                             <div className="flex justify-center bg-gray-100 p-1 rounded-lg">
-                                <button onClick={() => setMonthlyBreakdown('service')} className={`px-3 py-1 text-sm font-semibold rounded-md ${monthlyBreakdown === 'service' ? 'bg-white shadow' : 'text-gray-600'}`}>By Service</button>
-                                <button onClick={() => setMonthlyBreakdown('project')} className={`px-3 py-1 text-sm font-semibold rounded-md ${monthlyBreakdown === 'project' ? 'bg-white shadow' : 'text-gray-600'}`}>By Project</button>
+                                <button onClick={() => setMainChartView('bar')} className={`px-3 py-1 text-sm font-semibold rounded-md flex items-center gap-2 ${mainChartView === 'bar' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChartHorizontal size={16} />Bar</button>
+                                <button onClick={() => setMainChartView('pie')} className={`px-3 py-1 text-sm font-semibold rounded-md flex items-center gap-2 ${mainChartView === 'pie' ? 'bg-white shadow' : 'text-gray-600'}`}><PieChart size={16} />Pie</button>
                             </div>
-                        ) : (selectedProjects.length === 1 && (
-                            <div className="flex justify-center bg-gray-100 p-1 rounded-lg">
-                                <button onClick={() => setMainChartView('bar')} className={`px-3 py-1 text-sm font-semibold rounded-md ${mainChartView === 'bar' ? 'bg-white shadow' : 'text-gray-600'}`}>Bar</button>
-                                <button onClick={() => setMainChartView('pie')} className={`px-3 py-1 text-sm font-semibold rounded-md ${mainChartView === 'pie' ? 'bg-white shadow' : 'text-gray-600'}`}>Pie</button>
-                            </div>
-                        ))}
+                        )}
                     </div>
                     <div className="h-96 relative">
                         {mainChartView === 'bar' && <Bar data={barData} options={barOptions} />}

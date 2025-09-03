@@ -11,7 +11,7 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
   const [projectMeta, setProjectMeta] = useState({});
   const [expandedProjects, setExpandedProjects] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState(months[new Date().getMonth()]);
+  const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedYear, setSelectedYear] = useState(initialYear);
 
   useEffect(() => {
@@ -25,7 +25,9 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
             console.error("Failed to fetch project metadata", err);
         }
     };
-    fetchMeta();
+    if (yearlyData.length > 0) {
+        fetchMeta();
+    }
   }, [yearlyData]);
 
   const saveProjectMeta = async (projectName) => {
@@ -42,7 +44,6 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
           team: meta.team || ''
         })
       });
-    // FIX: Added missing curly braces to the catch block
     } catch (err) {
       console.error("Failed to save project metadata", err);
     }
@@ -58,7 +59,7 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
     }
     const term = searchTerm.trim().toLowerCase();
     if (term) {
-        return filtered.filter(project => {
+        filtered = filtered.filter(project => {
             const meta = projectMeta[project.project_name] || {};
             return (
                 project.project_name.toLowerCase().includes(term) ||
@@ -69,10 +70,15 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
             );
         });
     }
+    // MODIFIED: Hide projects with 0 cost for the selected month
+    if (selectedMonth) {
+        return filtered.filter(p => (p[`${selectedMonth}_cost`] || 0) > 0);
+    }
     return filtered;
-  }, [yearlyData, searchTerm, envFilter, projectMeta, selectedYear]);
+  }, [yearlyData, searchTerm, envFilter, projectMeta, selectedYear, selectedMonth]);
   
   const grandTotal = useMemo(() => {
+    if (!selectedMonth) return 0;
     return filteredProjectData.reduce((sum, project) => {
         const monthCost = project[`${selectedMonth}_cost`] || 0;
         return sum + monthCost;
@@ -86,6 +92,7 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
       <h3 className="text-2xl font-semibold text-gray-800 mb-4">Projects Overview</h3>
       <div className="flex flex-wrap items-center gap-4 mb-4">
         <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="p-2 border border-gray-300 rounded-lg">
+          <option value="">Select Month...</option>
           {months.map(m => <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
         </select>
         <select value={selectedYear} onChange={e => setSelectedYear(parseInt(e.target.value))} className="p-2 border border-gray-300 rounded-lg">
@@ -99,73 +106,80 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter }) => {
           className="p-2 border border-gray-300 rounded-lg flex-grow"
         />
       </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="w-8"></th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project Code</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Environment</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Team</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Cost ({selectedMonth.toUpperCase()})</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredProjectData.map((project) => (
-                <React.Fragment key={project.project_name}>
-                  <tr onClick={() => toggleProject(project.project_name)} className="cursor-pointer hover:bg-gray-50">
-                    <td className="px-4 py-4">{expandedProjects[project.project_name] ? <ChevronDown size={20} /> : <ChevronRight size={20} />}</td>
-                    <td className="px-6 py-4 whitespace-nowrap font-medium">{project.project_name}</td>
-                    {['projectCode', 'environment', 'owner', 'team'].map(field => (
-                        <td key={field} className="px-6 py-4 whitespace-nowrap">
-                          {editingProject === project.project_name ? (
-                            <input type="text" value={projectMeta[project.project_name]?.[field] || ''} onClick={e => e.stopPropagation()} onChange={e => setProjectMeta(meta => ({ ...meta, [project.project_name]: { ...meta[project.project_name], [field]: e.target.value } }))} placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace('Code', ' Code')} className="p-1 border border-gray-300 rounded w-24"/>
-                          ) : (
-                            <span>{projectMeta[project.project_name]?.[field] || ''}</span>
-                          )}
-                        </td>
-                    ))}
-                    <td className="px-6 py-4 whitespace-nowrap font-bold text-green-600">{formatCurrency(project[`${selectedMonth}_cost`] || 0)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                       {editingProject === project.project_name ? ( <button className="px-2 py-1 bg-green-600 text-white rounded" onClick={async e => { e.stopPropagation(); await saveProjectMeta(project.project_name); setEditingProject(null); }}>Save</button> ) : ( <button className="px-2 py-1 bg-blue-600 text-white rounded" onClick={e => { e.stopPropagation(); setEditingProject(project.project_name); }}>Edit</button> )}
-                    </td>
-                  </tr>
-                  {expandedProjects[project.project_name] && (
-                    <tr>
-                      <td colSpan="8" className="p-4 bg-slate-50">
-                        <div className="px-8">
-                            <h4 className="font-semibold text-gray-700 mb-2">Service Breakdown:</h4>
-                            <ul className="list-disc pl-5 space-y-2">
-                                {project.service_breakdown
-                                .filter(service => service.billing_month === selectedMonth && parseFloat(service.cost || 0) > 0)
-                                .sort((a, b) => parseFloat(b.cost || 0) - parseFloat(a.cost || 0))
-                                .map((service, idx) => (
-                                    <li key={`${service.service_description}-${idx}`} className="flex justify-between items-center">
-                                        <div>
-                                            <span className="font-medium text-gray-800">{service.service_description || service.type || 'Unknown Service'}</span>
-                                            {service.sku_description && <span className="ml-2 text-sm text-gray-500">SKU: {service.sku_description}</span>}
-                                        </div>
-                                        <span className="font-medium text-green-600">{formatCurrency(parseFloat(service.cost || 0))}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
+      
+      {!selectedMonth ? (
+        <div className="text-center py-10 text-gray-500">
+          Please select a month to view project data.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="w-8"></th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project Code</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Environment</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Team</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Cost ({selectedMonth.toUpperCase()})</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredProjectData.map((project) => (
+                  <React.Fragment key={project.project_name}>
+                    <tr onClick={() => toggleProject(project.project_name)} className="cursor-pointer hover:bg-gray-50">
+                      <td className="px-4 py-4">{expandedProjects[project.project_name] ? <ChevronDown size={20} /> : <ChevronRight size={20} />}</td>
+                      <td className="px-6 py-4 whitespace-nowrap font-medium">{project.project_name}</td>
+                      {['projectCode', 'environment', 'owner', 'team'].map(field => (
+                          <td key={field} className="px-6 py-4 whitespace-nowrap">
+                            {editingProject === project.project_name ? (
+                              <input type="text" value={projectMeta[project.project_name]?.[field] || ''} onClick={e => e.stopPropagation()} onChange={e => setProjectMeta(meta => ({ ...meta, [project.project_name]: { ...meta[project.project_name], [field]: e.target.value } }))} placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace('Code', ' Code')} className="p-1 border border-gray-300 rounded w-24"/>
+                            ) : (
+                              <span>{projectMeta[project.project_name]?.[field] || ''}</span>
+                            )}
+                          </td>
+                      ))}
+                      <td className="px-6 py-4 whitespace-nowrap font-bold text-green-600">{formatCurrency(project[`${selectedMonth}_cost`] || 0)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                         {editingProject === project.project_name ? ( <button className="px-2 py-1 bg-green-600 text-white rounded" onClick={async e => { e.stopPropagation(); await saveProjectMeta(project.project_name); setEditingProject(null); }}>Save</button> ) : ( <button className="px-2 py-1 bg-blue-600 text-white rounded" onClick={e => { e.stopPropagation(); setEditingProject(project.project_name); }}>Edit</button> )}
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
-            <tr className="bg-gray-100 font-bold">
-              <td colSpan="6" className="px-6 py-4 text-right text-gray-800">Grand Total</td>
-              <td className="px-6 py-4 text-green-800 font-extrabold">{formatCurrency(grandTotal)}</td>
-              <td></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+                    {expandedProjects[project.project_name] && (
+                      <tr>
+                        <td colSpan="8" className="p-4 bg-slate-50">
+                          <div className="px-8">
+                              <h4 className="font-semibold text-gray-700 mb-2">Service Breakdown:</h4>
+                              <ul className="list-disc pl-5 space-y-2">
+                                  {project.service_breakdown
+                                  .filter(service => service.billing_month === selectedMonth && parseFloat(service.cost || 0) > 0)
+                                  .sort((a, b) => parseFloat(b.cost || 0) - parseFloat(a.cost || 0))
+                                  .map((service, idx) => (
+                                      <li key={`${service.service_description}-${idx}`} className="flex justify-between items-center">
+                                          <div>
+                                              <span className="font-medium text-gray-800">{service.service_description || service.type || 'Unknown Service'}</span>
+                                              {service.sku_description && <span className="ml-2 text-sm text-gray-500">SKU: {service.sku_description}</span>}
+                                          </div>
+                                          <span className="font-medium text-green-600">{formatCurrency(parseFloat(service.cost || 0))}</span>
+                                      </li>
+                                  ))}
+                              </ul>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              <tr className="bg-gray-100 font-bold">
+                <td colSpan="6" className="px-6 py-4 text-right text-gray-800">Grand Total</td>
+                <td className="px-6 py-4 text-green-800 font-extrabold">{formatCurrency(grandTotal)}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 };

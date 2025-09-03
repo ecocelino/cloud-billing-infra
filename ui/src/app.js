@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut } from 'lucide-react';
+import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut, Filter } from 'lucide-react';
 import './index.css';
 import LoginPage from './components/LoginPage.js';
 import DashboardView from './components/DashboardView.js';
@@ -94,7 +94,6 @@ const App = () => {
   const { yearlyBillingData, isBillingLoading } = useYearlyBillingData(platformFilter, selectedYear);
   
   const handleLogin = (username, password) => {
-    // This should be replaced with a real API call
     if (username === 'admin' && password === 'password') {
       setIsLoggedIn(true);
     }
@@ -103,7 +102,6 @@ const App = () => {
   
   const AppContent = () => (
     <div className="flex min-h-screen bg-slate-100 font-sans">
-      {/* MODIFIED: Added `sticky top-0 h-screen` to make the sidebar stay in place */}
       <nav className="w-64 bg-white p-4 shadow-lg flex flex-col sticky top-0 h-screen">
         <div className="flex items-center space-x-2 mb-10 px-2">
           <Cloud size={40} className="text-blue-600" />
@@ -118,11 +116,25 @@ const App = () => {
       </nav>
 
       <div className="flex-1 p-4 sm:p-8 overflow-y-auto">
-        <main className="max-w-7xl mx-auto">
+        <header className="flex items-center bg-white p-4 rounded-xl shadow-md mb-6 no-print">
+            <div className="flex items-center space-x-2">
+                <Filter size={20} className="text-gray-600" />
+                <h2 className="text-lg font-semibold text-gray-800">Global Filters</h2>
+            </div>
+            <div className="flex items-center space-x-4 ml-auto">
+              <select value={envFilter} onChange={(e) => setEnvFilter(e.target.value)} className="p-2 border border-gray-300 rounded-full focus:outline-none text-sm">
+                  <option value="all">All Environments</option>
+                  <option value="prod">Production</option>
+                  <option value="nonprod">Non-Production</option>
+              </select>
+            </div>
+        </header>
+
+        <main>
           {isBillingLoading && <div className="text-center p-10 font-semibold text-gray-500">Loading Billing Data...</div>}
           {!isBillingLoading && view === 'dashboard' && <DashboardView inventory={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} />}
           {!isBillingLoading && view === 'projects' && <ProjectsView yearlyData={yearlyBillingData} initialYear={selectedYear} envFilter={envFilter} />}
-          {!isBillingLoading && view === 'billing' && <BillingView billingData={yearlyBillingData} selectedYear={selectedYear} platformFilter={platformFilter}/>}
+          {!isBillingLoading && view === 'billing' && <BillingView billingData={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} platformFilter={platformFilter}/>}
         </main>
       </div>
     </div>
