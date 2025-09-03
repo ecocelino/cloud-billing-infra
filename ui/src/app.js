@@ -27,10 +27,6 @@ const useYearlyBillingData = (platform, year) => {
       try {
         const response = await fetch(`${API_BASE_URL}/billing/services?platform=${platform}&year=${year}`);
         const rawData = await response.json();
-
-        // --- DEBUG LOG 1: Check the raw data from the API ---
-        console.log("1. Raw data received from API:", rawData);
-
         if (!Array.isArray(rawData)) {
             setProcessedData([]);
             return;
@@ -59,8 +55,10 @@ const useYearlyBillingData = (platform, year) => {
             const projectName = item.project_name;
             if (!projects[projectName]) {
                 projects[projectName] = { 
-                    project_name: projectName, platform: item.platform,
-                    billing_year: item.billing_year, service_breakdown: [] 
+                    project_name: projectName,
+                    platform: item.platform,
+                    billing_year: item.billing_year,
+                    service_breakdown: [] 
                 };
                 months.forEach(m => { projects[projectName][`${m}_cost`] = 0; });
             }
@@ -71,11 +69,7 @@ const useYearlyBillingData = (platform, year) => {
             }
         });
         
-        const finalData = Object.values(projects);
-
-        // --- DEBUG LOG 2: Check the final data before it's sent to the components ---
-        console.log("2. Processed data being sent to components:", finalData);
-        setProcessedData(finalData);
+        setProcessedData(Object.values(projects));
 
       } catch (error) {
         console.error("Failed to process billing data:", error);
@@ -93,26 +87,24 @@ const useYearlyBillingData = (platform, year) => {
 
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(true);
-  const [view, setView] = useState('projects');
+  const [view, setView] = useState('dashboard');
   const [platformFilter, setPlatformFilter] = useState('GCP');
   const [envFilter, setEnvFilter] = useState('all');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [error, setError] = useState('');
   const { yearlyBillingData, isBillingLoading } = useYearlyBillingData(platformFilter, selectedYear);
   
   const handleLogin = (username, password) => {
+    // This should be replaced with a real API call
     if (username === 'admin' && password === 'password') {
       setIsLoggedIn(true);
-      setError('');
-    } else {
-      setError('Invalid username or password.');
     }
   };
   const handleLogout = () => { setIsLoggedIn(false); };
   
   const AppContent = () => (
     <div className="flex min-h-screen bg-slate-100 font-sans">
-      <nav className="w-64 bg-white p-4 shadow-lg flex flex-col">
+      {/* MODIFIED: Added `sticky top-0 h-screen` to make the sidebar stay in place */}
+      <nav className="w-64 bg-white p-4 shadow-lg flex flex-col sticky top-0 h-screen">
         <div className="flex items-center space-x-2 mb-10 px-2">
           <Cloud size={40} className="text-blue-600" />
           <h1 className="text-xl font-bold text-gray-900">Cloud Cost System</h1>
@@ -128,7 +120,7 @@ const App = () => {
       <div className="flex-1 p-4 sm:p-8 overflow-y-auto">
         <main className="max-w-7xl mx-auto">
           {isBillingLoading && <div className="text-center p-10 font-semibold text-gray-500">Loading Billing Data...</div>}
-          {!isBillingLoading && view === 'dashboard' && <DashboardView inventory={yearlyBillingData} initialYear={selectedYear} setSelectedYear={setSelectedYear} />}
+          {!isBillingLoading && view === 'dashboard' && <DashboardView inventory={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} />}
           {!isBillingLoading && view === 'projects' && <ProjectsView yearlyData={yearlyBillingData} initialYear={selectedYear} envFilter={envFilter} />}
           {!isBillingLoading && view === 'billing' && <BillingView billingData={yearlyBillingData} selectedYear={selectedYear} platformFilter={platformFilter}/>}
         </main>
@@ -136,6 +128,6 @@ const App = () => {
     </div>
   );
   
-  return isLoggedIn ? <AppContent /> : <LoginPage onLogin={handleLogin} error={error} />;
+  return isLoggedIn ? <AppContent /> : <LoginPage onLogin={handleLogin} />;
 };
 export default App;
