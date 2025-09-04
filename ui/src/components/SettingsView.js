@@ -143,7 +143,7 @@ const SettingsView = ({ token, currentUserRole }) => {
                         <select name="role" value={newUser.role} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
                             <option value="user">User</option>
                             <option value="admin">Admin</option>
-                            {currentUserRole === 'superuser' && <option value="superuser">Superuser</option>}
+                            {currentUserRole === 'superadmin' && <option value="superadmin">SuperAdmin</option>}
                         </select>
                     </div>
                     <button type="submit" className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700">Create User</button>
@@ -171,14 +171,14 @@ const SettingsView = ({ token, currentUserRole }) => {
                                         <button 
                                             onClick={() => openEditModal(user)} 
                                             className="text-indigo-600 hover:text-indigo-900 disabled:text-gray-400 disabled:cursor-not-allowed"
-                                            disabled={currentUserRole === 'admin' && user.role === 'superuser'}
+                                            disabled={currentUserRole === 'admin' && user.role === 'superadmin'}
                                         >
                                             <Edit size={18} />
                                         </button>
                                         <button 
                                             onClick={() => handleDeleteUser(user.id)} 
                                             className="text-red-600 hover:text-red-900 ml-4 disabled:text-gray-400 disabled:cursor-not-allowed"
-                                            disabled={currentUserRole === 'admin' && user.role === 'superuser'}
+                                            disabled={currentUserRole === 'admin' && user.role === 'superadmin'}
                                         >
                                             <Trash2 size={18} />
                                         </button>
@@ -201,11 +201,11 @@ const SettingsView = ({ token, currentUserRole }) => {
                                     value={editingUser.role} 
                                     onChange={(e) => setEditingUser({...editingUser, role: e.target.value})}
                                     className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"
-                                    disabled={currentUserRole === 'admin' && editingUser.role === 'superuser'}
+                                    disabled={currentUserRole === 'admin' && editingUser.role === 'superadmin'}
                                 >
                                     <option value="user">User</option>
                                     <option value="admin">Admin</option>
-                                    {currentUserRole === 'superuser' && <option value="superuser">Superuser</option>}
+                                    {currentUserRole === 'superadmin' && <option value="superadmin">SuperAdmin</option>}
                                 </select>
                             </div>
                             <div>

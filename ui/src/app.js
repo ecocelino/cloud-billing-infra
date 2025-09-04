@@ -107,9 +107,9 @@ const useYearlyBillingData = (platform, year, token, dataVersion) => {
 
 
 const App = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
-  const [token, setToken] = useState("dummy-token");
-  const [userRole, setUserRole] = useState("superuser");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [token, setToken] = useState(null);
+  const [userRole, setUserRole] = useState(null);
   const [view, setView] = useState('dashboard');
   const [platformFilter, setPlatformFilter] = useState('GCP');
   const [envFilter, setEnvFilter] = useState('all');
@@ -120,6 +120,17 @@ const App = () => {
   const triggerRefetch = () => setDataVersion(v => v + 1);
 
   const { yearlyBillingData, isBillingLoading } = useYearlyBillingData(platformFilter, selectedYear, token, dataVersion);
+
+  // ✅ Load token/role from localStorage on app load
+  useEffect(() => {
+    const savedToken = localStorage.getItem("authToken");
+    const savedRole = localStorage.getItem("userRole");
+    if (savedToken && savedRole) {
+      setToken(savedToken);
+      setUserRole(savedRole);
+      setIsLoggedIn(true);
+    }
+  }, []);
   
   const handleLogin = async (username, password) => {
     setError('');
@@ -134,6 +145,9 @@ const App = () => {
         setToken(data.token);
         setUserRole(data.role);
         setIsLoggedIn(true);
+        // ✅ Save to localStorage
+        localStorage.setItem("authToken", data.token);
+        localStorage.setItem("userRole", data.role);
       } else {
         const result = await response.json();
         setError(result.error || 'Invalid username or password.');
@@ -147,6 +161,9 @@ const App = () => {
     setToken(null);
     setUserRole(null); 
     setIsLoggedIn(false); 
+    // ✅ Clear from localStorage
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("userRole");
   };
   
   const AppContent = () => (
@@ -160,7 +177,7 @@ const App = () => {
           <button onClick={() => setView('dashboard')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'dashboard' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><LayoutDashboard size={20} /><span>Dashboard</span></button>
           <button onClick={() => setView('projects')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'projects' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><FolderOpen size={20} /><span>Projects</span></button>
           <button onClick={() => setView('billing')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'billing' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><BarChart3 size={20} /><span>Billing</span></button>
-          {(userRole === 'admin' || userRole === 'superuser') && (
+          {(userRole === 'admin' || userRole === 'superadmin') && (
             <button onClick={() => setView('settings')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'settings' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><Settings size={20} /><span>Settings</span></button>
           )}
         </div>
@@ -187,7 +204,6 @@ const App = () => {
           
           {!isBillingLoading && view === 'dashboard' && <DashboardView inventory={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} />}
           
-          {/* MODIFIED: Pass setSelectedYear to ProjectsView */}
           {!isBillingLoading && view === 'projects' && <ProjectsView yearlyData={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} envFilter={envFilter} userRole={userRole} token={token} />}
           
           {!isBillingLoading && view === 'billing' && <BillingView billingData={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} platformFilter={platformFilter} userRole={userRole} token={token} onUploadSuccess={triggerRefetch}/>}
@@ -201,4 +217,3 @@ const App = () => {
   return isLoggedIn ? <AppContent /> : <LoginPage onLogin={handleLogin} error={error} />;
 };
 export default App;
-

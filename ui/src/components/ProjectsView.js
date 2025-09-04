@@ -294,7 +294,7 @@ const ProjectsView = ({ yearlyData = [], selectedYear, setSelectedYear, envFilte
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Total Cost ({selectedMonth.toUpperCase()})
                 </th>
-                {(userRole === 'admin' || userRole === 'superuser') && (
+                {(userRole === 'admin' || userRole === 'superadmin') && (
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase no-print">Actions</th>
                 )}
               </tr>
@@ -313,7 +313,7 @@ const ProjectsView = ({ yearlyData = [], selectedYear, setSelectedYear, envFilte
                     {['projectCode', 'environment', 'owner', 'team'].map(field => (
                       <td key={field} className="px-6 py-4 whitespace-nowrap">
                         <span className="no-print">
-                          {editingProject === project.project_name && (userRole === 'admin' || userRole === 'superuser') ? (
+                          {editingProject === project.project_name && (userRole === 'admin' || userRole === 'superadmin') ? (
                             <input
                               type="text"
                               value={projectMeta[project.project_name]?.[field] || ''}
@@ -335,7 +335,7 @@ const ProjectsView = ({ yearlyData = [], selectedYear, setSelectedYear, envFilte
                     <td className="px-6 py-4 whitespace-nowrap font-bold text-green-600">
                       {formatCurrency(project[`${selectedMonth}_cost`] || 0)}
                     </td>
-                    {(userRole === 'admin' || userRole === 'superuser') && (
+                    {(userRole === 'admin' || userRole === 'superadmin') && (
                       <td className="px-6 py-4 whitespace-nowrap no-print">
                         {editingProject === project.project_name ? (
                           <button
@@ -364,7 +364,7 @@ const ProjectsView = ({ yearlyData = [], selectedYear, setSelectedYear, envFilte
                   </tr>
                   {(isPrinting || expandedProjects[project.project_name]) && (
                     <tr>
-                      <td colSpan={(userRole === 'admin' || userRole === 'superuser') ? 8 : 7}>
+                      <td colSpan={(userRole === 'admin' || userRole === 'superadmin') ? 8 : 7}>
                         <div className="p-4 bg-slate-100">
                           <div className="px-8">
                             <h4 className="font-semibold text-gray-700 mb-2">Service Breakdown:</h4>
@@ -383,7 +383,7 @@ const ProjectsView = ({ yearlyData = [], selectedYear, setSelectedYear, envFilte
               <tr className="bg-gray-100 font-bold">
                 <td colSpan="6" className="px-6 py-4 text-right text-gray-800">Grand Total</td>
                 <td className="px-6 py-4 text-green-800 font-extrabold">{formatCurrency(grandTotalToDisplay)}</td>
-                {(userRole === 'admin' || userRole === 'superuser') && <td className="no-print"></td>}
+                {(userRole === 'admin' || userRole === 'superadmin') && <td className="no-print"></td>}
               </tr>
             </tbody>
           </table>

@@ -68,8 +68,8 @@ def setup_database():
     cursor.execute("SELECT * FROM users WHERE username = 'admin'")
     if not cursor.fetchone():
         hashed_password = generate_password_hash('password', method='pbkdf2:sha256')
-        cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)", ('admin', hashed_password, 'superuser'))
-        print("Default admin user created with superuser role.", file=sys.stderr)
+        cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)", ('admin', hashed_password, 'superadmin'))
+        print("Default admin user created with superadmin role.", file=sys.stderr)
 
     conn.commit()
     cursor.close()
@@ -117,7 +117,7 @@ def login():
 
 @app.route('/api/users', methods=['GET'])
 @token_required
-@role_required(['admin', 'superuser'])
+@role_required(['admin', 'superadmin'])
 def get_users(current_user_role):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -129,12 +129,12 @@ def get_users(current_user_role):
 
 @app.route('/api/users', methods=['POST'])
 @token_required
-@role_required(['admin', 'superuser'])
+@role_required(['admin', 'superadmin'])
 def create_user(current_user_role):
     data = request.json
     username, password, role = data.get('username'), data.get('password'), data.get('role', 'user')
-    if current_user_role == 'admin' and role == 'superuser':
-        return jsonify({'error': 'Admins cannot create superusers.'}), 403
+    if current_user_role == 'admin' and role == 'superadmin':
+        return jsonify({'error': 'Admins cannot create superadmins.'}), 403
     hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -146,7 +146,7 @@ def create_user(current_user_role):
 
 @app.route('/api/users/<int:user_id>', methods=['PUT'])
 @token_required
-@role_required(['admin', 'superuser'])
+@role_required(['admin', 'superadmin'])
 def update_user(current_user_role, user_id):
     data = request.json
     role, password = data.get('role'), data.get('password')
@@ -156,10 +156,10 @@ def update_user(current_user_role, user_id):
     user_to_edit = cursor.fetchone()
     if not user_to_edit:
         return jsonify({'error': 'User not found'}), 404
-    if current_user_role == 'admin' and user_to_edit['role'] == 'superuser':
+    if current_user_role == 'admin' and user_to_edit['role'] == 'superadmin':
         cursor.close()
         conn.close()
-        return jsonify({'error': 'Admins cannot edit superusers.'}), 403
+        return jsonify({'error': 'Admins cannot edit superadmins.'}), 403
     if role:
         cursor.execute("UPDATE users SET role = %s WHERE id = %s", (role, user_id))
     if password:
@@ -172,7 +172,7 @@ def update_user(current_user_role, user_id):
 
 @app.route('/api/users/<int:user_id>', methods=['DELETE'])
 @token_required
-@role_required(['admin', 'superuser'])
+@role_required(['admin', 'superadmin'])
 def delete_user(current_user_role, user_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -180,10 +180,10 @@ def delete_user(current_user_role, user_id):
     user_to_delete = cursor.fetchone()
     if not user_to_delete:
         return jsonify({'error': 'User not found'}), 404
-    if current_user_role == 'admin' and user_to_delete['role'] == 'superuser':
+    if current_user_role == 'admin' and user_to_delete['role'] == 'superadmin':
         cursor.close()
         conn.close()
-        return jsonify({'error': 'Admins cannot delete superusers.'}), 403
+        return jsonify({'error': 'Admins cannot delete superadmins.'}), 403
     cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
     conn.commit()
     cursor.close()
@@ -204,7 +204,7 @@ def get_all_project_meta(current_user_role):
 
 @app.route('/api/projects/meta', methods=['PUT'])
 @token_required
-@role_required(['admin', 'superuser'])
+@role_required(['admin', 'superadmin'])
 def update_project_meta(current_user_role):
     data = request.json
     project_name, project_code, environment, owner, team = data.get('project_name'), data.get('project_code'), data.get('environment'), data.get('owner'), data.get('team')
@@ -218,7 +218,7 @@ def update_project_meta(current_user_role):
 
 @app.route('/api/billing/upload_csv', methods=['POST'])
 @token_required
-@role_required(['admin', 'superuser'])
+@role_required(['admin', 'superadmin'])
 def upload_billing_csv(current_user_role):
     if 'file' not in request.files: return jsonify({'error': 'No file part'}), 400
     file, month, platform, year = request.files['file'], request.form['month'], request.form['platform'], int(request.form['year'])
