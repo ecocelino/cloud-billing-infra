@@ -1,16 +1,17 @@
 import React, { useState, useMemo } from 'react';
-import { FileUp } from 'lucide-react';
+import { FileUp, Info, FileDown } from 'lucide-react';
 import { formatCurrency } from '../utils.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const years = [2023, 2024, 2025, 2026, 2027];
 
-const BillingView = ({ billingData = [], selectedYear, setSelectedYear, platformFilter, userRole, token }) => {
+const BillingView = ({ billingData = [], selectedYear, setSelectedYear, platformFilter, userRole, token, onUploadSuccess }) => {
   const [uploadFile, setUploadFile] = useState(null);
   const [selectedMonthUpload, setSelectedMonthUpload] = useState('');
   const [selectedYearUpload, setSelectedYearUpload] = useState(new Date().getFullYear());
   const [uploadStatus, setUploadStatus] = useState('');
+  const [newProjects, setNewProjects] = useState([]);
 
   const handleBillingUpload = async () => {
     if (!uploadFile) {
@@ -22,6 +23,7 @@ const BillingView = ({ billingData = [], selectedYear, setSelectedYear, platform
         return;
     }
     setUploadStatus('Uploading...');
+    setNewProjects([]);
     const formData = new FormData();
     formData.append('file', uploadFile);
     formData.append('month', selectedMonthUpload);
@@ -36,9 +38,18 @@ const BillingView = ({ billingData = [], selectedYear, setSelectedYear, platform
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
-      setUploadStatus(`${result.message} Page will refresh shortly.`);
+      
+      setUploadStatus(result.message);
+      if (result.new_projects && result.new_projects.length > 0) {
+        setNewProjects(result.new_projects);
+      }
+      
       document.getElementById('billing-file-input').value = "";
-      setTimeout(() => window.location.reload(), 2000);
+      
+      if (onUploadSuccess) {
+          onUploadSuccess();
+      }
+
     } catch (err) {
       setUploadStatus(`Error: ${err.message}`);
     }
@@ -53,6 +64,29 @@ const BillingView = ({ billingData = [], selectedYear, setSelectedYear, platform
       }))
       .sort((a, b) => b.total_cost - a.total_cost);
   }, [billingData, selectedYear]);
+
+  // NEW: Handler for exporting data to CSV
+  const handleExportCSV = () => {
+    const headers = ['Project Name', ...months.map(m => m.toUpperCase()), 'Total'];
+    
+    const rows = processedBillingData.map(project => {
+        const rowData = [
+            `"${project.project_name.replace(/"/g, '""')}"`, // Escape quotes
+            ...months.map(month => project[`${month}_cost`] || 0)
+        ];
+        rowData.push(project.total_cost);
+        return rowData.join(',');
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `billing_overview_${selectedYear}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="space-y-6">
@@ -73,6 +107,25 @@ const BillingView = ({ billingData = [], selectedYear, setSelectedYear, platform
             </button>
           </div>
           {uploadStatus && <p className="mt-4 text-center text-sm text-gray-600">{uploadStatus}</p>}
+          {newProjects.length > 0 && (
+            <div className="mt-4 p-4 bg-green-50 border-l-4 border-green-400">
+                <div className="flex">
+                    <div className="flex-shrink-0">
+                        <Info className="h-5 w-5 text-green-400" />
+                    </div>
+                    <div className="ml-3">
+                        <p className="text-sm font-medium text-green-800">
+                            The following new projects were discovered and added to the database:
+                        </p>
+                        <div className="mt-2 text-sm text-green-700">
+                            <ul className="list-disc pl-5 space-y-1">
+                                {newProjects.map(proj => <li key={proj}>{proj}</li>)}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -83,31 +136,35 @@ const BillingView = ({ billingData = [], selectedYear, setSelectedYear, platform
               <select value={selectedYear} onChange={e => setSelectedYear(parseInt(e.target.value))} className="p-2 border border-gray-300 rounded-lg">
                   {years.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
+              {/* NEW: Export to CSV Button */}
+              <button onClick={handleExportCSV} className="p-2 bg-green-600 text-white rounded-lg flex items-center gap-2">
+                <FileDown size={18} /> Export CSV
+              </button>
             </div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky left-0 bg-gray-50 z-10">Project Name</th>
                 {months.map(month => 
                     <th key={month} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase transition-colors">
                         {month.toUpperCase()}
                     </th>
                 )}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 z-10">Total</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {processedBillingData.map(row => (
                 <tr key={row.project_name}>
-                  <td className="px-6 py-4 whitespace-nowrap font-medium">{row.project_name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap font-medium sticky left-0 bg-white">{row.project_name}</td>
                   {months.map(month => (
                     <td key={month} className="px-6 py-4 whitespace-nowrap transition-colors">
                         {formatCurrency(row[`${month}_cost`] || 0)}
                     </td>
                   ))}
-                  <td className="px-6 py-4 whitespace-nowrap font-bold">{formatCurrency(row.total_cost)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap font-bold sticky right-0 bg-white">{formatCurrency(row.total_cost)}</td>
                 </tr>
               ))}
             </tbody>

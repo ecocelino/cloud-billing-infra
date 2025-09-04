@@ -13,7 +13,7 @@ if (!API_BASE_URL) {
   throw new Error("FATAL ERROR: REACT_APP_API_URL is not defined. Please check your .env file and restart your containers.");
 }
 
-const useYearlyBillingData = (platform, year, token) => {
+const useYearlyBillingData = (platform, year, token, dataVersion) => {
   const [processedData, setProcessedData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -47,6 +47,8 @@ const useYearlyBillingData = (platform, year, token) => {
         const transformedData = rawData.map(item => {
             let targetProjectName = item.project_name;
             const monthIndex = months.indexOf(item.billing_month);
+
+            // Rule 1: Handle '[Charges not specific to a project]'
             if (item.project_name === '[Charges not specific to a project]') {
                 if (year < transferYear || (year === transferYear && monthIndex <= renameMonthIndex)) {
                     targetProjectName = 'Netenrich Resolution Intelligence Cloud';
@@ -54,6 +56,13 @@ const useYearlyBillingData = (platform, year, token) => {
                     targetProjectName = 'ai-research-and-development';
                 }
             }
+
+            // NEW RULE: Move specific services from 'multisys-hostnet-prod-1'
+            const servicesToMove = ['Cloud IDS', 'Cloud NGFW Enterprise Endpoint Uptime'];
+            if (item.project_name === 'multisys-hostnet-prod-1' && servicesToMove.includes(item.sku_description)) {
+                targetProjectName = 'ms-multipay-prod-1';
+            }
+
             return { ...item, project_name: targetProjectName };
         });
 
@@ -96,7 +105,7 @@ const useYearlyBillingData = (platform, year, token) => {
       }
     };
     fetchDataAndProcess();
-  }, [platform, year, token]);
+  }, [platform, year, token, dataVersion]);
 
   return { yearlyBillingData: processedData, isBillingLoading: isLoading };
 };
@@ -104,14 +113,18 @@ const useYearlyBillingData = (platform, year, token) => {
 
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(true);
-  const [token, setToken] = useState("dummy-token"); // Using a dummy token for dev to bypass login
-  const [userRole, setUserRole] = useState("superuser"); // Default to superuser for dev
+  const [token, setToken] = useState("dummy-token");
+  const [userRole, setUserRole] = useState("superuser");
   const [view, setView] = useState('dashboard');
   const [platformFilter, setPlatformFilter] = useState('GCP');
   const [envFilter, setEnvFilter] = useState('all');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [error, setError] = useState('');
-  const { yearlyBillingData, isBillingLoading } = useYearlyBillingData(platformFilter, selectedYear, token);
+  
+  const [dataVersion, setDataVersion] = useState(0);
+  const triggerRefetch = () => setDataVersion(v => v + 1);
+
+  const { yearlyBillingData, isBillingLoading } = useYearlyBillingData(platformFilter, selectedYear, token, dataVersion);
   
   const handleLogin = async (username, password) => {
     setError('');
@@ -176,13 +189,9 @@ const App = () => {
 
         <main>
           {isBillingLoading && view !== 'settings' && <div className="text-center p-10 font-semibold text-gray-500">Loading Billing Data...</div>}
-          
           {!isBillingLoading && view === 'dashboard' && <DashboardView inventory={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} />}
-          
-          {!isBillingLoading && view === 'projects' && <ProjectsView yearlyData={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} envFilter={envFilter} userRole={userRole} token={token} />}
-          
-          {!isBillingLoading && view === 'billing' && <BillingView billingData={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} platformFilter={platformFilter} userRole={userRole} token={token}/>}
-          
+          {!isBillingLoading && view === 'projects' && <ProjectsView yearlyData={yearlyBillingData} initialYear={selectedYear} envFilter={envFilter} userRole={userRole} token={token} />}
+          {!isBillingLoading && view === 'billing' && <BillingView billingData={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} platformFilter={platformFilter} userRole={userRole} token={token} onUploadSuccess={triggerRefetch}/>}
           {view === 'settings' && <SettingsView token={token} currentUserRole={userRole} />}
         </main>
       </div>

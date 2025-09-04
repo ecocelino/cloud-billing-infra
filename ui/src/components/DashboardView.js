@@ -1,26 +1,83 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Bar, Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend } from 'chart.js';
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
-import { DollarSign, ChevronDown, TrendingUp, TrendingDown, Target, PieChart, BarChartHorizontal } from 'lucide-react';
+import { DollarSign, ChevronDown, TrendingUp, TrendingDown, Target, PieChart, BarChartHorizontal, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '../utils.js';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
 
 const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const years = [2023, 2024, 2025, 2026, 2027];
-const colorPalette = ['#3b82f6', '#10b981', '#ef4444', '#f97316', '#8b5cf6', '#64748b', '#f59e0b', '#ec4899', '#84cc16'];
+const colorPalette = ['#3b82f6', '#10b981', '#ef4444', '#f97316', '#8b5cf6', '#64748b', '#f59e0b'];
+
+const ServiceBreakdownView = ({ services, selectedMonth }) => {
+    const [expandedServices, setExpandedServices] = useState({});
+
+    const toggleService = (serviceName) => {
+        setExpandedServices(prev => ({ ...prev, [serviceName]: !prev[serviceName] }));
+    };
+
+    const aggregatedServices = useMemo(() => {
+        const serviceMap = new Map();
+        const dataForMonth = services.filter(s => selectedMonth === 'all' || s.billing_month === selectedMonth);
+        
+        dataForMonth.forEach(item => {
+                const serviceName = item.service_description || item.type || 'Uncategorized Services';
+                if (!serviceMap.has(serviceName)) {
+                    serviceMap.set(serviceName, { totalCost: 0, skus: [] });
+                }
+                const serviceGroup = serviceMap.get(serviceName);
+                const cost = parseFloat(item.cost || 0);
+                serviceGroup.totalCost += cost;
+                serviceGroup.skus.push({ ...item, cost });
+            });
+        return Array.from(serviceMap.entries()).sort(([,a], [,b]) => b.totalCost - a.totalCost);
+    }, [services, selectedMonth]);
+    
+    if (aggregatedServices.length === 0) {
+        return <p className="text-gray-500 text-center mt-4">No service data to display for the current selection.</p>;
+    }
+
+    return (
+        <ul className="space-y-2">
+            {aggregatedServices.map(([serviceName, data]) => (
+                <li key={serviceName}>
+                    <div onClick={() => toggleService(serviceName)} className="flex justify-between items-center cursor-pointer p-1 rounded hover:bg-slate-200">
+                        <div className="flex items-center">
+                            {expandedServices[serviceName] ? <ChevronDown size={16} className="mr-1" /> : <ChevronRight size={16} className="mr-1" />}
+                            <span className="font-bold text-gray-800">{serviceName}</span>
+                        </div>
+                        <span className="font-bold text-gray-800">{formatCurrency(data.totalCost)}</span>
+                    </div>
+                    {expandedServices[serviceName] && (
+                        <ul className="list-disc pl-10 mt-1 space-y-1">
+                            {data.skus.sort((a,b) => b.cost - a.cost).map((sku, idx) => (
+                                <li key={idx} className="flex justify-between">
+                                    <span className="text-gray-600">{sku.sku_description || 'N/A'}</span>
+                                    <span className="font-medium text-gray-600">{formatCurrency(sku.cost)}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </li>
+            ))}
+        </ul>
+    );
+};
 
 const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
     const [selectedProjects, setSelectedProjects] = useState([]);
     const [selectedMonth, setSelectedMonth] = useState('all');
     const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
     const [projectSearchTerm, setProjectSearchTerm] = useState('');
-    const [mainChartView, setMainChartView] = useState('bar');
+    const [rightChartView, setRightChartView] = useState('pie');
     const dropdownRef = useRef(null);
 
     const projectNames = useMemo(() =>
         [...new Set(inventory.map(item => item.project_name).sort())]
     , [inventory]);
-
+    
+    // FIXED: Restored the missing filteredProjectNames hook
     const filteredProjectNames = useMemo(() => {
         if (!projectSearchTerm) return projectNames;
         return projectNames.filter(name =>
@@ -70,10 +127,8 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
     const topProjectStat = useMemo(() => {
         const [name = 'N/A', cost = 0] = Object.entries(projectCosts)
             .reduce((max, entry) => (entry[1] > max[1] ? entry : max), ['', 0]);
-        
         const projectDetails = inventory.find(p => p.project_name === name);
         const code = projectDetails ? projectDetails.project_code : '';
-
         return { name, cost, code };
     }, [projectCosts, inventory]);
 
@@ -86,7 +141,6 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
                     const cost = (selectedMonth === 'all')
                         ? parseFloat(serviceItem.cost || 0)
                         : (serviceItem.billing_month === selectedMonth ? parseFloat(serviceItem.cost || 0) : 0);
-                    
                     if (cost > 0) {
                         services[serviceName] = (services[serviceName] || 0) + cost;
                     }
@@ -116,42 +170,7 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
         );
     };
     
-    const barData = useMemo(() => {
-        if (selectedMonth !== 'all') {
-            const topServices = serviceBreakdown.slice(0, 20);
-            return {
-                labels: topServices.map(s => s.name),
-                datasets: [{ label: `Cost for ${selectedMonth.toUpperCase()}`, data: topServices.map(s => s.totalCost), backgroundColor: colorPalette[1] }],
-            };
-        }
-        if (selectedProjects.length === 1) {
-            const project = filteredInventory[0];
-            const servicesInProject = {};
-            if (project && Array.isArray(project.service_breakdown)) {
-                project.service_breakdown.forEach(item => {
-                    const serviceName = item.service_description || item.sku_description || item.type || 'Unknown';
-                    if (!servicesInProject[serviceName]) { servicesInProject[serviceName] = Array(12).fill(0); }
-                    const monthIndex = months.indexOf(item.billing_month);
-                    if (monthIndex > -1) { servicesInProject[serviceName][monthIndex] += parseFloat(item.cost || 0); }
-                });
-            }
-            return {
-                labels: months.map(m => m.charAt(0).toUpperCase() + m.slice(1)),
-                datasets: Object.entries(servicesInProject).map(([serviceName, monthlyData], index) => ({
-                    label: serviceName, data: monthlyData, backgroundColor: colorPalette[index % colorPalette.length],
-                })),
-            };
-        }
-        if (selectedProjects.length > 1) {
-            return {
-                labels: months.map(m => m.charAt(0).toUpperCase() + m.slice(1)),
-                datasets: selectedProjects.map((projectName, index) => ({
-                    label: projectName,
-                    data: months.map(m => inventory.find(p => p.project_name === projectName)?.[`${m}_cost`] || 0),
-                    backgroundColor: colorPalette[index % colorPalette.length],
-                })),
-            };
-        }
+    const mainBarData = useMemo(() => {
         const monthlyCosts = {};
         months.forEach(m => { monthlyCosts[m] = 0; });
         filteredInventory.forEach(item => { months.forEach(m => { monthlyCosts[m] += parseFloat(item[`${m}_cost`] || 0); }); });
@@ -159,10 +178,10 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
             labels: months.map(m => m.charAt(0).toUpperCase() + m.slice(1)),
             datasets: [{ label: `Total Monthly Cost`, data: months.map(m => monthlyCosts[m]), backgroundColor: colorPalette[0] }],
         };
-    }, [filteredInventory, selectedProjects, inventory, selectedMonth, serviceBreakdown]);
-    
-    const pieData = useMemo(() => {
-        const dataSet = (selectedProjects.length === 1 || selectedMonth !== 'all') ? serviceBreakdown : Object.entries(projectCosts).map(([name, cost])=>({name, totalCost:cost}));
+    }, [filteredInventory]);
+
+    const rightChartData = useMemo(() => {
+        const dataSet = selectedProjects.length === 1 ? serviceBreakdown : Object.entries(projectCosts).map(([name, cost])=>({name, totalCost:cost}));
         const sortedData = dataSet.sort((a, b) => b.totalCost - a.totalCost);
         const topN = 7;
         const topItems = sortedData.slice(0, topN);
@@ -177,28 +196,10 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
             labels,
             datasets: [{ data, backgroundColor: colorPalette, borderColor: '#ffffff', borderWidth: 2 }]
         };
-    }, [projectCosts, serviceBreakdown, selectedProjects, selectedMonth]);
+    }, [projectCosts, serviceBreakdown, selectedProjects]);
 
-    const barOptions = useMemo(() => ({
-        responsive: true, maintainAspectRatio: false,
-        plugins: { 
-            legend: { display: selectedProjects.length !== 0 },
-            tooltip: { callbacks: { 
-                label: (context) => `${context.dataset.label || ''}: ${formatCurrency(context.parsed.y)}`,
-                footer: (tooltipItems) => {
-                    if (tooltipItems.length <= 1) return '';
-                    let sum = tooltipItems.reduce((total, item) => total + item.parsed.y, 0);
-                    return 'Total: ' + formatCurrency(sum);
-                },
-            }}
-        },
-        scales: { 
-            x: { stacked: selectedProjects.length === 1 && selectedMonth === 'all' },
-            y: { stacked: selectedProjects.length === 1 && selectedMonth === 'all', beginAtZero: true, ticks: { callback: value => formatCurrency(value) } }
-        }
-    }), [selectedProjects, selectedMonth]);
-    
-    const pieOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, title: { display: true } } };
+    const mainBarOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: value => formatCurrency(value) } } } };
+    const rightChartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } };
 
     return (
         <div className="space-y-6">
@@ -254,43 +255,39 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                <div className={`bg-white p-6 rounded-xl shadow-lg ${selectedProjects.length === 1 ? 'lg:col-span-5' : 'lg:col-span-3'}`}>
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-semibold text-gray-800">
-                            {selectedMonth !== 'all' ? `Top Services for ${selectedMonth.toUpperCase()}` : (selectedProjects.length === 1 ? `Service Breakdown for ${selectedProjects[0]}`: (mainChartView === 'pie' ? 'Service Cost Breakdown' : 'Monthly Cost Breakdown'))}
-                        </h3>
-                        {selectedProjects.length === 1 && (
-                            <div className="flex justify-center bg-gray-100 p-1 rounded-lg">
-                                <button onClick={() => setMainChartView('bar')} className={`px-3 py-1 text-sm font-semibold rounded-md flex items-center gap-2 ${mainChartView === 'bar' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChartHorizontal size={16} />Bar</button>
-                                <button onClick={() => setMainChartView('pie')} className={`px-3 py-1 text-sm font-semibold rounded-md flex items-center gap-2 ${mainChartView === 'pie' ? 'bg-white shadow' : 'text-gray-600'}`}><PieChart size={16} />Pie</button>
-                            </div>
-                        )}
-                    </div>
+                <div className="lg:col-span-3 bg-white p-6 rounded-xl shadow-lg">
+                    <h3 className="text-lg font-semibold mb-4 text-gray-800">Monthly Cost Breakdown</h3>
                     <div className="h-96 relative">
-                        { mainChartView === 'bar' && <Bar data={barData} options={barOptions} /> }
-                        { mainChartView === 'pie' && <Pie data={pieData} options={{...pieOptions, plugins: {...pieOptions.plugins, title: {display: true, text: `Cost Breakdown by ${selectedProjects.length === 1 ? 'Service' : 'Project'}`}}}} /> }
+                        <Bar data={mainBarData} options={mainBarOptions} />
                     </div>
                 </div>
                 
-                {selectedProjects.length !== 1 && (
-                    <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg flex flex-col">
-                        <h3 className="text-lg font-semibold mb-4 text-gray-800 text-center">Project Cost Breakdown</h3>
-                        <div className="relative flex-1 h-96">
-                           <Pie data={pieData} options={{...pieOptions, maintainAspectRatio: false }} />
-                        </div>
+                <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-semibold text-gray-800">
+                           {selectedProjects.length === 1 ? 'Service Breakdown' : 'Project Breakdown'}
+                        </h3>
+                        {selectedProjects.length === 1 && (
+                            <div className="flex justify-center bg-gray-100 p-1 rounded-lg">
+                                <button onClick={() => setRightChartView('bar')} className={`px-3 py-1 text-sm font-semibold rounded-md flex items-center gap-2 ${rightChartView === 'bar' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChartHorizontal size={16} />Bar</button>
+                                <button onClick={() => setRightChartView('pie')} className={`px-3 py-1 text-sm font-semibold rounded-md flex items-center gap-2 ${rightChartView === 'pie' ? 'bg-white shadow' : 'text-gray-600'}`}><PieChart size={16} />Pie</button>
+                            </div>
+                        )}
                     </div>
-                )}
+                    <div className="relative flex-1 h-96">
+                       {rightChartView === 'pie' ? (
+                           <Pie data={rightChartData} options={{...rightChartOptions, plugins: {...rightChartOptions.plugins, title: {display: true, text: `Cost by ${selectedProjects.length === 1 ? 'Service' : 'Project'}`}}}} />
+                       ) : (
+                           <Bar data={rightChartData} options={{...mainBarOptions, indexAxis: 'y'}} />
+                       )}
+                    </div>
+                </div>
             </div>
 
             <div className="bg-white p-6 rounded-xl shadow-lg">
                 <h3 className="text-lg font-semibold mb-4 text-gray-800">Detailed Service Breakdown</h3>
                 <div className="overflow-y-auto max-h-[400px]">
-                    {serviceBreakdown.length > 0 ? (
-                        <table className="min-w-full">
-                            <thead className="bg-gray-50 sticky top-0"><tr><th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Service</th><th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total Cost</th></tr></thead>
-                            <tbody className="divide-y divide-gray-200">{serviceBreakdown.map(service => (<tr key={service.name}><td className="px-4 py-3 whitespace-nowrap text-sm text-gray-800">{service.name}</td><td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 text-right font-medium">{formatCurrency(service.totalCost)}</td></tr>))}</tbody>
-                        </table>
-                    ) : (<p className="text-gray-500 text-center mt-4">No service data to display for the current selection.</p>)}
+                    <ServiceBreakdownView services={filteredInventory.flatMap(p => p.service_breakdown)} selectedMonth={selectedMonth} />
                 </div>
             </div>
         </div>

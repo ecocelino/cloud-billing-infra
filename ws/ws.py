@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 # --- App Configuration ---
 app = Flask(__name__)
 CORS(app)
-app.config['SECRET_KEY'] = 'your_super_secret_key'
+app.config['SECRET_KEY'] = 'your_super_secret_key_change_me'
 
 # --- Database Setup ---
 db_config = {"user": os.getenv("DB_USER"), "password": os.getenv("DB_PASSWORD"), "host": os.getenv("DB_HOST"), "database": os.getenv("DB_DATABASE")}
@@ -64,11 +64,13 @@ def setup_database():
             cost DECIMAL(10,2) DEFAULT 0.00, FOREIGN KEY (project_id) REFERENCES projects(id)
         )
     """)
+    
     cursor.execute("SELECT * FROM users WHERE username = 'admin'")
     if not cursor.fetchone():
         hashed_password = generate_password_hash('password', method='pbkdf2:sha256')
         cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)", ('admin', hashed_password, 'superuser'))
         print("Default admin user created with superuser role.", file=sys.stderr)
+
     conn.commit()
     cursor.close()
     conn.close()
@@ -78,8 +80,7 @@ def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         token = request.headers.get('x-access-token')
-        if not token:
-            return jsonify({'message': 'Token is missing!'}), 401
+        if not token: return jsonify({'message': 'Token is missing!'}), 401
         try:
             data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
             current_user_role = data['role']
@@ -102,8 +103,7 @@ def role_required(roles):
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.json
-    username = data.get('username')
-    password = data.get('password')
+    username, password = data.get('username'), data.get('password')
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
@@ -111,10 +111,7 @@ def login():
     cursor.close()
     conn.close()
     if user and check_password_hash(user['password_hash'], password):
-        token = jwt.encode({
-            'id': user['id'], 'username': user['username'], 'role': user['role'],
-            'exp': datetime.utcnow() + timedelta(hours=24)
-        }, app.config['SECRET_KEY'], algorithm="HS256")
+        token = jwt.encode({'id': user['id'], 'username': user['username'], 'role': user['role'], 'exp': datetime.utcnow() + timedelta(hours=24)}, app.config['SECRET_KEY'], algorithm="HS256")
         return jsonify({'token': token, 'role': user['role']})
     return jsonify({'error': 'Invalid credentials'}), 401
 
@@ -135,9 +132,7 @@ def get_users(current_user_role):
 @role_required(['admin', 'superuser'])
 def create_user(current_user_role):
     data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    role = data.get('role', 'user')
+    username, password, role = data.get('username'), data.get('password'), data.get('role', 'user')
     if current_user_role == 'admin' and role == 'superuser':
         return jsonify({'error': 'Admins cannot create superusers.'}), 403
     hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
@@ -154,8 +149,7 @@ def create_user(current_user_role):
 @role_required(['admin', 'superuser'])
 def update_user(current_user_role, user_id):
     data = request.json
-    role = data.get('role')
-    password = data.get('password')
+    role, password = data.get('role'), data.get('password')
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT role FROM users WHERE id = %s", (user_id,))
@@ -213,11 +207,7 @@ def get_all_project_meta(current_user_role):
 @role_required(['admin', 'superuser'])
 def update_project_meta(current_user_role):
     data = request.json
-    project_name = data.get('project_name')
-    project_code = data.get('project_code')
-    environment = data.get('environment')
-    owner = data.get('owner')
-    team = data.get('team')
+    project_name, project_code, environment, owner, team = data.get('project_name'), data.get('project_code'), data.get('environment'), data.get('owner'), data.get('team')
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE projects SET project_code = %s, environment = %s, owner = %s, team = %s WHERE project_name = %s", (project_code, environment, owner, team, project_name))
@@ -230,12 +220,8 @@ def update_project_meta(current_user_role):
 @token_required
 @role_required(['admin', 'superuser'])
 def upload_billing_csv(current_user_role):
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    file = request.files['file']
-    month = request.form['month']
-    platform = request.form['platform']
-    year = int(request.form['year'])
+    if 'file' not in request.files: return jsonify({'error': 'No file part'}), 400
+    file, month, platform, year = request.files['file'], request.form['month'], request.form['platform'], int(request.form['year'])
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -245,26 +231,32 @@ def upload_billing_csv(current_user_role):
         cost_col_name = 'cost ($)' if 'cost ($)' in df.columns else 'cost'
         if 'project name' not in df.columns or not cost_col_name:
             return jsonify({'error': "CSV must contain 'Project name' and a cost column."}), 400
+        
         cursor.execute("DELETE FROM monthly_service_costs WHERE billing_year = %s AND billing_month = %s AND platform = %s", (year, month, platform))
+        
         items_added = 0
+        new_projects = []
         for index, row in df.iterrows():
-            project_name = row.get('project name')
-            cost = row.get(cost_col_name)
+            project_name, cost = row.get('project name'), row.get(cost_col_name)
             if pd.isna(project_name) or pd.isna(cost) or cost <= 0: continue
+            
             cursor.execute("SELECT id FROM projects WHERE project_name = %s", (project_name,))
             project = cursor.fetchone()
             if not project:
                 cursor.execute("INSERT INTO projects (project_name) VALUES (%s)", (project_name,))
                 project_id = cursor.lastrowid
+                if project_name not in new_projects:
+                    new_projects.append(project_name)
             else:
                 project_id = project[0]
-            cursor.execute(
-                "INSERT INTO monthly_service_costs (project_id, billing_year, billing_month, platform, service_description, sku_description, type, cost) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                (project_id, year, month, platform, row.get('service description'), row.get('sku description'), row.get('type'), cost)
-            )
+            
+            cursor.execute("INSERT INTO monthly_service_costs (project_id, billing_year, billing_month, platform, service_description, sku_description, type, cost) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (project_id, year, month, platform, row.get('service description'), row.get('sku description'), row.get('type'), cost))
             items_added += 1
+            
         conn.commit()
-        return jsonify({'message': f"Successfully added {items_added} billing items for {month.capitalize()} {year}."}), 200
+        
+        return jsonify({'message': f"Successfully added {items_added} items.", 'new_projects': new_projects}), 200
     except Exception as e:
         conn.rollback()
         return jsonify({'error': f'Failed to process file: {str(e)}'}), 500
@@ -275,14 +267,11 @@ def upload_billing_csv(current_user_role):
 @app.route('/api/billing/services', methods=['GET'])
 @token_required
 def get_billing_services(current_user_role):
-    platform = request.args.get('platform')
-    year = request.args.get('year', None)
-    month = request.args.get('month', None)
+    platform, year, month = request.args.get('platform'), request.args.get('year', None), request.args.get('month', None)
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     query = "SELECT p.project_name, msc.* FROM monthly_service_costs msc JOIN projects p ON msc.project_id = p.id"
-    conditions = []
-    params = []
+    conditions, params = [], []
     if platform and platform.lower() != 'all':
         conditions.append("msc.platform = %s")
         params.append(platform)
@@ -300,7 +289,6 @@ def get_billing_services(current_user_role):
     conn.close()
     return jsonify(results)
 
-# --- App Initialization ---
 if __name__ == '__main__':
     with app.app_context():
         wait_for_db()
