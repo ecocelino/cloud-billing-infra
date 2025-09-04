@@ -47,8 +47,6 @@ const useYearlyBillingData = (platform, year, token, dataVersion) => {
         const transformedData = rawData.map(item => {
             let targetProjectName = item.project_name;
             const monthIndex = months.indexOf(item.billing_month);
-
-            // Rule 1: Handle '[Charges not specific to a project]'
             if (item.project_name === '[Charges not specific to a project]') {
                 if (year < transferYear || (year === transferYear && monthIndex <= renameMonthIndex)) {
                     targetProjectName = 'Netenrich Resolution Intelligence Cloud';
@@ -56,13 +54,10 @@ const useYearlyBillingData = (platform, year, token, dataVersion) => {
                     targetProjectName = 'ai-research-and-development';
                 }
             }
-
-            // NEW RULE: Move specific services from 'multisys-hostnet-prod-1'
             const servicesToMove = ['Cloud IDS', 'Cloud NGFW Enterprise Endpoint Uptime'];
-            if (item.project_name === 'multisys-hostnet-prod-1' && servicesToMove.includes(item.sku_description)) {
+            if (item.project_name === 'multisys-hostnet-prod-1' && servicesToMove.includes(item.service_description)) {
                 targetProjectName = 'ms-multipay-prod-1';
             }
-
             return { ...item, project_name: targetProjectName };
         });
 
@@ -189,9 +184,14 @@ const App = () => {
 
         <main>
           {isBillingLoading && view !== 'settings' && <div className="text-center p-10 font-semibold text-gray-500">Loading Billing Data...</div>}
+          
           {!isBillingLoading && view === 'dashboard' && <DashboardView inventory={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} />}
-          {!isBillingLoading && view === 'projects' && <ProjectsView yearlyData={yearlyBillingData} initialYear={selectedYear} envFilter={envFilter} userRole={userRole} token={token} />}
+          
+          {/* MODIFIED: Pass setSelectedYear to ProjectsView */}
+          {!isBillingLoading && view === 'projects' && <ProjectsView yearlyData={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} envFilter={envFilter} userRole={userRole} token={token} />}
+          
           {!isBillingLoading && view === 'billing' && <BillingView billingData={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} platformFilter={platformFilter} userRole={userRole} token={token} onUploadSuccess={triggerRefetch}/>}
+          
           {view === 'settings' && <SettingsView token={token} currentUserRole={userRole} />}
         </main>
       </div>

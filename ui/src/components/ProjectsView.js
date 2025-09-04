@@ -10,26 +10,38 @@ const years = [2023, 2024, 2025, 2026, 2027];
 const ServiceBreakdownView = ({ services, selectedMonth, isPrinting = false }) => {
     const [expandedServices, setExpandedServices] = useState({});
 
+    const aggregatedServices = useMemo(() => {
+        const serviceMap = new Map();
+        const dataForMonth = services.filter(
+            s => s.billing_month === selectedMonth && parseFloat(s.cost || 0) > 0
+        );
+        
+        dataForMonth.forEach(item => {
+            const serviceName = item.service_description || item.type || 'Uncategorized Services';
+            if (!serviceMap.has(serviceName)) {
+                serviceMap.set(serviceName, { totalCost: 0, skus: [] });
+            }
+            const serviceGroup = serviceMap.get(serviceName);
+            const cost = parseFloat(item.cost || 0);
+            serviceGroup.totalCost += cost;
+            serviceGroup.skus.push({ ...item, cost });
+        });
+        return Array.from(serviceMap.entries()).sort(([,a], [,b]) => b.totalCost - a.totalCost);
+    }, [services, selectedMonth]);
+
+    useEffect(() => {
+        if (isPrinting) {
+            const allServices = {};
+            aggregatedServices.forEach(([serviceName]) => {
+                allServices[serviceName] = true;
+            });
+            setExpandedServices(allServices);
+        }
+    }, [isPrinting, aggregatedServices]);
+
     const toggleService = (serviceName) => {
         setExpandedServices(prev => ({ ...prev, [serviceName]: !prev[serviceName] }));
     };
-
-    const aggregatedServices = useMemo(() => {
-        const serviceMap = new Map();
-        const dataForMonth = services.filter(s => s.billing_month === selectedMonth && parseFloat(s.cost || 0) > 0);
-        
-        dataForMonth.forEach(item => {
-                const serviceName = item.service_description || item.type || 'Uncategorized Services';
-                if (!serviceMap.has(serviceName)) {
-                    serviceMap.set(serviceName, { totalCost: 0, skus: [] });
-                }
-                const serviceGroup = serviceMap.get(serviceName);
-                const cost = parseFloat(item.cost || 0);
-                serviceGroup.totalCost += cost;
-                serviceGroup.skus.push({ ...item, cost });
-            });
-        return Array.from(serviceMap.entries()).sort(([,a], [,b]) => b.totalCost - a.totalCost);
-    }, [services, selectedMonth]);
 
     if (aggregatedServices.length === 0) {
         return <p className="text-gray-500 italic no-print">No service costs recorded for this month.</p>;
@@ -39,14 +51,21 @@ const ServiceBreakdownView = ({ services, selectedMonth, isPrinting = false }) =
         <ul className="space-y-2">
             {aggregatedServices.map(([serviceName, data]) => (
                 <li key={serviceName}>
-                    <div onClick={() => toggleService(serviceName)} className="flex justify-between items-center cursor-pointer p-1 rounded hover:bg-slate-200 no-print">
+                    <div
+                        onClick={() => toggleService(serviceName)}
+                        className="flex justify-between items-center cursor-pointer p-1 rounded hover:bg-slate-200 no-print"
+                    >
                         <div className="flex items-center">
-                            {(isPrinting || expandedServices[serviceName]) ? <ChevronDown size={16} className="mr-1 text-gray-500" /> : <ChevronRight size={16} className="mr-1 text-gray-500" />}
+                            {(isPrinting || expandedServices[serviceName]) ? (
+                                <ChevronDown size={16} className="mr-1 text-gray-500" />
+                            ) : (
+                                <ChevronRight size={16} className="mr-1 text-gray-500" />
+                            )}
                             <span className="font-bold text-gray-800">{serviceName}</span>
                         </div>
                         <span className="font-bold text-gray-800">{formatCurrency(data.totalCost)}</span>
                     </div>
-                     <div className="hidden print:flex justify-between items-center p-1">
+                    <div className="hidden print:flex justify-between items-center p-1">
                         <span className="font-bold text-gray-800 pl-5">{serviceName}</span>
                         <span className="font-bold text-gray-800">{formatCurrency(data.totalCost)}</span>
                     </div>
@@ -67,13 +86,12 @@ const ServiceBreakdownView = ({ services, selectedMonth, isPrinting = false }) =
     );
 };
 
-const ProjectsView = ({ yearlyData = [], initialYear, envFilter, userRole, token }) => {
+const ProjectsView = ({ yearlyData = [], selectedYear, setSelectedYear, envFilter, userRole, token }) => {
   const [editingProject, setEditingProject] = useState(null);
   const [projectMeta, setProjectMeta] = useState({});
   const [expandedProjects, setExpandedProjects] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedMonth, setSelectedMonth] = useState('');
-  const [selectedYear, setSelectedYear] = useState(initialYear);
   
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportBy, setExportBy] = useState('projectName');
@@ -134,13 +152,11 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter, userRole, token
     return filtered;
   }, [yearlyData, searchTerm, envFilter, projectMeta, selectedYear, selectedMonth]);
   
-  const grandTotal = useMemo(() => {
-    if (!selectedMonth) return 0;
-    return filteredProjectData.reduce((sum, project) => sum + (project[`${selectedMonth}_cost`] || 0), 0);
-  }, [filteredProjectData, selectedMonth]);
+  const toggleProject = (projectName) => {
+    setExpandedProjects(prev => ({ ...prev, [projectName]: !prev[projectName] }));
+  };
 
-  const toggleProject = (projectName) => { setExpandedProjects(prev => ({ ...prev, [projectName]: !prev[projectName] })); };
-  
+  // Export-related helpers (CSV + PDF)
   const handleExportSelection = (identifier) => {
     setSelectedForExport(prev => 
         prev.includes(identifier) ? prev.filter(item => item !== identifier) : [...prev, identifier]
@@ -160,47 +176,28 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter, userRole, token
     if (projectsToExport.length === 0) { alert('No projects match your selection for export.'); return; }
     
     let csvContent = "Project,Project Code,Environment,Owner,Team,Service,SKU,Cost\n";
-    let totalExportCost = 0;
-
-    if (exportBy === 'projectCode') {
-        const mergedByCode = {};
-        projectsToExport.forEach(p => {
-            const code = projectMeta[p.project_name]?.projectCode || 'N/A';
-            if (!mergedByCode[code]) {
-                mergedByCode[code] = { ...p, service_breakdown: [] };
-            }
-            mergedByCode[code].service_breakdown.push(...p.service_breakdown);
-        });
-
-        Object.values(mergedByCode).forEach(p => {
-            const meta = projectMeta[p.project_name] || {};
-            const code = meta.projectCode || 'N/A';
-            let projectTotal = 0;
-            p.service_breakdown.filter(s => s.billing_month === selectedMonth && parseFloat(s.cost || 0) > 0)
-                .forEach(s => {
-                    const cost = parseFloat(s.cost || 0);
-                    projectTotal += cost;
-                    const row = [`"${code} (Merged)"`, `"${code}"`, `""`, `""`, `""`, `"${s.service_description || s.type || 'N/A'}"`, `"${s.sku_description || 'N/A'}"`, cost].join(',');
-                    csvContent += row + '\n';
-                });
-            csvContent += `,,,,,,Total,"${projectTotal}"\n`;
-            totalExportCost += projectTotal;
-        });
-
-    } else {
-        projectsToExport.forEach(p => {
-            const meta = projectMeta[p.project_name] || {};
-            let projectTotal = 0;
-            p.service_breakdown.filter(s => s.billing_month === selectedMonth && parseFloat(s.cost || 0) > 0)
-                .forEach(s => {
-                    const cost = parseFloat(s.cost || 0);
-                    projectTotal += cost;
-                    const row = [`"${p.project_name}"`,`"${meta.projectCode || ''}"`,`"${meta.environment || ''}"`,`"${meta.owner || ''}"`,`"${meta.team || ''}"`,`"${s.service_description || s.type || 'N/A'}"`,`"${s.sku_description || 'N/A'}"`, cost].join(',');
-                    csvContent += row + '\n';
-                });
-            csvContent += `,,,,,,Total,"${projectTotal}"\n`;
-        });
-    }
+    projectsToExport.forEach(p => {
+        const meta = projectMeta[p.project_name] || {};
+        let projectTotal = 0;
+        p.service_breakdown
+          .filter(s => s.billing_month === selectedMonth && parseFloat(s.cost || 0) > 0)
+          .forEach(s => {
+              const cost = parseFloat(s.cost || 0);
+              projectTotal += cost;
+              const row = [
+                `"${p.project_name}"`,
+                `"${meta.projectCode || ''}"`,
+                `"${meta.environment || ''}"`,
+                `"${meta.owner || ''}"`,
+                `"${meta.team || ''}"`,
+                `"${s.service_description || s.type || 'N/A'}"`,
+                `"${s.sku_description || 'N/A'}"`,
+                cost
+              ].join(',');
+              csvContent += row + '\n';
+          });
+        csvContent += `,,,,,,Total,"${projectTotal}"\n`;
+    });
 
     const encodedUri = encodeURI("data:text/csv;charset=utf-8," + csvContent);
     const link = document.createElement("a");
@@ -239,15 +236,40 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter, userRole, token
       <div className="no-print">
         <h3 className="text-2xl font-semibold text-gray-800 mb-4">Projects Overview</h3>
         <div className="flex flex-wrap items-center gap-4 mb-4">
-          <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="p-2 border border-gray-300 rounded-lg">
+          {/* Month selector */}
+          <select
+            value={selectedMonth}
+            onChange={e => setSelectedMonth(e.target.value)}
+            className="p-2 border border-gray-300 rounded-lg"
+          >
             <option value="">Select Month...</option>
-            {months.map(m => <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
+            {months.map(m => (
+              <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>
+            ))}
           </select>
-          <select value={selectedYear} onChange={e => setSelectedYear(parseInt(e.target.value))} className="p-2 border border-gray-300 rounded-lg">
+
+          {/* Year selector (uses props.setSelectedYear) */}
+          <select
+            value={selectedYear}
+            onChange={e => setSelectedYear(parseInt(e.target.value))}
+            className="p-2 border border-gray-300 rounded-lg"
+          >
             {years.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
-          <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search..." className="p-2 border border-gray-300 rounded-lg flex-grow"/>
-          <button onClick={() => setIsExportModalOpen(true)} disabled={!selectedMonth} className="p-2 bg-blue-600 text-white rounded-lg flex items-center gap-2 disabled:bg-gray-400">
+
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            placeholder="Search..."
+            className="p-2 border border-gray-300 rounded-lg flex-grow"
+          />
+
+          <button
+            onClick={() => setIsExportModalOpen(true)}
+            disabled={!selectedMonth}
+            className="p-2 bg-blue-600 text-white rounded-lg flex items-center gap-2 disabled:bg-gray-400"
+          >
             <FileDown size={18} /> Export
           </button>
         </div>
@@ -257,7 +279,9 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter, userRole, token
         <div className="text-center py-10 text-gray-500 no-print">Please select a month to view project data.</div>
       ) : (
         <div className={`printable-area ${isPrinting ? '' : 'overflow-x-auto'}`}>
-          <h3 className="text-2xl font-semibold text-gray-800 mb-4 hidden print:block text-center">Project Cost Report - {selectedMonth.toUpperCase()} {selectedYear}</h3>
+          <h3 className="text-2xl font-semibold text-gray-800 mb-4 hidden print:block text-center">
+            Project Cost Report - {selectedMonth.toUpperCase()} {selectedYear}
+          </h3>
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -267,45 +291,95 @@ const ProjectsView = ({ yearlyData = [], initialYear, envFilter, userRole, token
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Environment</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Team</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Cost ({selectedMonth.toUpperCase()})</th>
-                {(userRole === 'admin' || userRole === 'superuser') && (<th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase no-print">Actions</th>)}
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Total Cost ({selectedMonth.toUpperCase()})
+                </th>
+                {(userRole === 'admin' || userRole === 'superuser') && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase no-print">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {projectsToDisplay.map((project) => (
-                  <React.Fragment key={project.project_name}>
-                    <tr onClick={() => toggleProject(project.project_name)} className="cursor-pointer hover:bg-gray-50">
-                      <td className="px-4 py-4 no-print">{expandedProjects[project.project_name] ? <ChevronDown size={20} /> : <ChevronRight size={20} />}</td>
-                      <td className="px-6 py-4 whitespace-nowrap font-medium">{project.project_name}</td>
-                      {['projectCode', 'environment', 'owner', 'team'].map(field => (
-                          <td key={field} className="px-6 py-4 whitespace-nowrap">
-                            <span className="no-print">{editingProject === project.project_name && (userRole === 'admin' || userRole === 'superuser') ? (
-                              <input type="text" value={projectMeta[project.project_name]?.[field] || ''} onClick={e => e.stopPropagation()} onChange={e => setProjectMeta(meta => ({ ...meta, [project.project_name]: { ...meta[project.project_name], [field]: e.target.value } }))} placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace('Code', ' Code')} className="p-1 border border-gray-300 rounded w-24"/>
-                            ) : (<span>{projectMeta[project.project_name]?.[field] || ''}</span>)}</span>
-                            <span className="hidden print:inline">{projectMeta[project.project_name]?.[field] || ''}</span>
-                          </td>
-                      ))}
-                      <td className="px-6 py-4 whitespace-nowrap font-bold text-green-600">{formatCurrency(project[`${selectedMonth}_cost`] || 0)}</td>
-                      {(userRole === 'admin' || userRole === 'superuser') && (
-                        <td className="px-6 py-4 whitespace-nowrap no-print">
-                          {editingProject === project.project_name ? ( <button className="px-2 py-1 bg-green-600 text-white rounded" onClick={async e => { e.stopPropagation(); await saveProjectMeta(project.project_name); setEditingProject(null); }}>Save</button> ) : ( <button className="px-2 py-1 bg-blue-600 text-white rounded" onClick={e => { e.stopPropagation(); setEditingProject(project.project_name); }}>Edit</button> )}
-                        </td>
-                      )}
-                    </tr>
-                    {(isPrinting || expandedProjects[project.project_name]) && (
-                      <tr>
-                        <td colSpan={ (userRole === 'admin' || userRole === 'superuser') ? 8 : 7}>
-                          <div className="p-4 bg-slate-100">
-                            <div className="px-8">
-                                <h4 className="font-semibold text-gray-700 mb-2">Service Breakdown:</h4>
-                                <ServiceBreakdownView services={project.service_breakdown} selectedMonth={selectedMonth} isPrinting={isPrinting} />
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
+                <React.Fragment key={project.project_name}>
+                  <tr
+                    onClick={() => toggleProject(project.project_name)}
+                    className="cursor-pointer hover:bg-gray-50"
+                  >
+                    <td className="px-4 py-4 no-print">
+                      {expandedProjects[project.project_name] ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap font-medium">{project.project_name}</td>
+                    {['projectCode', 'environment', 'owner', 'team'].map(field => (
+                      <td key={field} className="px-6 py-4 whitespace-nowrap">
+                        <span className="no-print">
+                          {editingProject === project.project_name && (userRole === 'admin' || userRole === 'superuser') ? (
+                            <input
+                              type="text"
+                              value={projectMeta[project.project_name]?.[field] || ''}
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => setProjectMeta(meta => ({
+                                ...meta,
+                                [project.project_name]: { ...meta[project.project_name], [field]: e.target.value }
+                              }))}
+                              placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace('Code', ' Code')}
+                              className="p-1 border border-gray-300 rounded w-24"
+                            />
+                          ) : (
+                            <span>{projectMeta[project.project_name]?.[field] || ''}</span>
+                          )}
+                        </span>
+                        <span className="hidden print:inline">{projectMeta[project.project_name]?.[field] || ''}</span>
+                      </td>
+                    ))}
+                    <td className="px-6 py-4 whitespace-nowrap font-bold text-green-600">
+                      {formatCurrency(project[`${selectedMonth}_cost`] || 0)}
+                    </td>
+                    {(userRole === 'admin' || userRole === 'superuser') && (
+                      <td className="px-6 py-4 whitespace-nowrap no-print">
+                        {editingProject === project.project_name ? (
+                          <button
+                            className="px-2 py-1 bg-green-600 text-white rounded"
+                            onClick={async e => {
+                              e.stopPropagation();
+                              await saveProjectMeta(project.project_name);
+                              setEditingProject(null);
+                            }}
+                          >
+                            Save
+                          </button>
+                        ) : (
+                          <button
+                            className="px-2 py-1 bg-blue-600 text-white rounded"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setEditingProject(project.project_name);
+                            }}
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </td>
                     )}
-                  </React.Fragment>
-                ))}
+                  </tr>
+                  {(isPrinting || expandedProjects[project.project_name]) && (
+                    <tr>
+                      <td colSpan={(userRole === 'admin' || userRole === 'superuser') ? 8 : 7}>
+                        <div className="p-4 bg-slate-100">
+                          <div className="px-8">
+                            <h4 className="font-semibold text-gray-700 mb-2">Service Breakdown:</h4>
+                            <ServiceBreakdownView
+                              services={project.service_breakdown}
+                              selectedMonth={selectedMonth}
+                              isPrinting={isPrinting}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
               <tr className="bg-gray-100 font-bold">
                 <td colSpan="6" className="px-6 py-4 text-right text-gray-800">Grand Total</td>
                 <td className="px-6 py-4 text-green-800 font-extrabold">{formatCurrency(grandTotalToDisplay)}</td>
