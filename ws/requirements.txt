@@ -1,6 +1,10 @@
 Flask
 Flask-CORS
+flask_sqlalchemy
 mysql-connector-python
 pandas
 werkzeug
 PyJWT
+pymysql
+cryptography
+python-dotenv

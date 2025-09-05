@@ -433,4 +433,3 @@ const ProjectsView = ({ yearlyData = [], selectedYear, setSelectedYear, envFilte
   );
 };
 export default ProjectsView;
-

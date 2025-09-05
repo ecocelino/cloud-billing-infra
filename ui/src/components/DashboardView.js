@@ -1,3 +1,4 @@
+// src/components/DashboardView.js
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Bar, Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend } from 'chart.js';
@@ -27,7 +28,7 @@ const ServiceBreakdownView = ({ services, selectedMonth }) => {
                     serviceMap.set(serviceName, { totalCost: 0, skus: [] });
                 }
                 const serviceGroup = serviceMap.get(serviceName);
-                const cost = parseFloat(item.cost || 0);
+                const cost = parseFloat(item['cost ($)'] || 0);
                 serviceGroup.totalCost += cost;
                 serviceGroup.skus.push({ ...item, cost });
             });
@@ -139,8 +140,8 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
                 proj.service_breakdown.forEach(serviceItem => {
                     const serviceName = serviceItem.service_description || serviceItem.sku_description || serviceItem.type || 'Unknown Service';
                     const cost = (selectedMonth === 'all')
-                        ? parseFloat(serviceItem.cost || 0)
-                        : (serviceItem.billing_month === selectedMonth ? parseFloat(serviceItem.cost || 0) : 0);
+                        ? parseFloat(serviceItem['cost ($)'] || 0)
+                        : (serviceItem.billing_month === selectedMonth ? parseFloat(serviceItem['cost ($)'] || 0) : 0);
                     if (cost > 0) {
                         services[serviceName] = (services[serviceName] || 0) + cost;
                     }

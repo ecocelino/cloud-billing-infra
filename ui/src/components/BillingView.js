@@ -176,4 +176,3 @@ const BillingView = ({ billingData = [], selectedYear, setSelectedYear, platform
 };
 
 export default BillingView;
-
