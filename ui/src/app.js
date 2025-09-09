@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut, Settings, Filter } from 'lucide-react';
-import './index.css';
-import LoginPage from './components/LoginPage.js';
-import DashboardView from './components/DashboardView.js';
-import ProjectsView from './components/ProjectsView.js';
-import BillingView from './components/BillingView.js';
-import SettingsView from './components/SettingsView.js';
+import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut, Settings, Filter, Tag, ChevronDown } from 'lucide-react';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL;
+// Component Imports
+import LoginPage from './components/LoginPage';
+import DashboardView from './components/DashboardView';
+import ProjectsView from './components/ProjectsView';
+import BillingView from './components/BillingView';
+import SettingsView from './components/SettingsView';
+import PricingView from './components/PricingView';
 
-if (!API_BASE_URL) {
-  throw new Error("FATAL ERROR: REACT_APP_API_URL is not defined. Please check your .env file and restart your containers.");
-}
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const useYearlyBillingData = (platform, year, token, dataVersion) => {
   const [processedData, setProcessedData] = useState([]);
@@ -54,7 +52,7 @@ const useYearlyBillingData = (platform, year, token, dataVersion) => {
                     targetProjectName = 'ai-research-and-development';
                 }
             }
-            const servicesToMove = ['Cloud IDS', 'Cloud NGFW Enterprise Endpoint Uptime'];
+            const servicesToMove = ['Cloud IDS', 'Network Security'];
             if (item.project_name === 'multisys-hostnet-prod-1' && servicesToMove.includes(item.service_description)) {
                 targetProjectName = 'ms-multipay-prod-1';
             }
@@ -115,13 +113,14 @@ const App = () => {
   const [envFilter, setEnvFilter] = useState('all');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [error, setError] = useState('');
-  
   const [dataVersion, setDataVersion] = useState(0);
   const triggerRefetch = () => setDataVersion(v => v + 1);
 
+  const [isPricingMenuOpen, setIsPricingMenuOpen] = useState(false);
+  const [initialPricingTier, setInitialPricingTier] = useState('basic');
+
   const { yearlyBillingData, isBillingLoading } = useYearlyBillingData(platformFilter, selectedYear, token, dataVersion);
 
-  // ✅ Load token/role from localStorage on app load
   useEffect(() => {
     const savedToken = localStorage.getItem("authToken");
     const savedRole = localStorage.getItem("userRole");
@@ -145,7 +144,6 @@ const App = () => {
         setToken(data.token);
         setUserRole(data.role);
         setIsLoggedIn(true);
-        // ✅ Save to localStorage
         localStorage.setItem("authToken", data.token);
         localStorage.setItem("userRole", data.role);
       } else {
@@ -161,11 +159,15 @@ const App = () => {
     setToken(null);
     setUserRole(null); 
     setIsLoggedIn(false); 
-    // ✅ Clear from localStorage
     localStorage.removeItem("authToken");
     localStorage.removeItem("userRole");
   };
-  
+
+  const handlePricingNavigation = (tier) => {
+    setView('pricing');
+    setInitialPricingTier(tier);
+  };
+
   const AppContent = () => (
     <div className="flex min-h-screen bg-slate-100 font-sans">
       <nav className="w-64 bg-white p-4 shadow-lg flex flex-col sticky top-0 h-screen">
@@ -177,6 +179,24 @@ const App = () => {
           <button onClick={() => setView('dashboard')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'dashboard' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><LayoutDashboard size={20} /><span>Dashboard</span></button>
           <button onClick={() => setView('projects')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'projects' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><FolderOpen size={20} /><span>Projects</span></button>
           <button onClick={() => setView('billing')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'billing' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><BarChart3 size={20} /><span>Billing</span></button>
+          
+          <div>
+            <button
+                onClick={() => setIsPricingMenuOpen(!isPricingMenuOpen)}
+                className={`w-full flex justify-between items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'pricing' ? 'bg-gray-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100'}`}
+            >
+                <div className="flex items-center space-x-3"><Tag size={20} /><span>Pricing</span></div>
+                <ChevronDown size={20} className={`transform transition-transform duration-200 ${isPricingMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isPricingMenuOpen && (
+                <div className="pt-2 pl-6 space-y-1">
+                    <button onClick={() => handlePricingNavigation('basic')} className={`w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 ${ initialPricingTier === 'basic' && view === 'pricing' ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}>GCP Basic</button>
+                    <button onClick={() => handlePricingNavigation('standard')} className={`w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 ${ initialPricingTier === 'standard' && view === 'pricing' ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}>GCP Standard</button>
+                    <button onClick={() => handlePricingNavigation('premium')} className={`w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 ${ initialPricingTier === 'premium' && view === 'pricing' ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}>GCP Premium</button>
+                </div>
+            )}
+          </div>
+
           {(userRole === 'admin' || userRole === 'superadmin') && (
             <button onClick={() => setView('settings')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'settings' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><Settings size={20} /><span>Settings</span></button>
           )}
@@ -185,22 +205,21 @@ const App = () => {
       </nav>
 
       <div className="flex-1 p-4 sm:p-8 overflow-y-auto">
-        <header className="flex items-center bg-white p-4 rounded-xl shadow-md mb-6 no-print">
-            <div className="flex items-center space-x-2">
-                <Filter size={20} className="text-gray-600" />
-                <h2 className="text-lg font-semibold text-gray-800">Global Filters</h2>
-            </div>
-            <div className="flex items-center space-x-4 ml-auto">
-              <select value={envFilter} onChange={(e) => setEnvFilter(e.target.value)} className="p-2 border border-gray-300 rounded-full focus:outline-none text-sm">
-                  <option value="all">All Environments</option>
-                  <option value="prod">Production</option>
-                  <option value="nonprod">Non-Production</option>
-              </select>
-            </div>
-        </header>
+        {!['settings', 'pricing'].includes(view) && (
+          <header className="flex items-center bg-white p-4 rounded-xl shadow-md mb-6 no-print">
+              <div className="flex items-center space-x-2"><Filter size={20} className="text-gray-600" /><h2 className="text-lg font-semibold text-gray-800">Global Filters</h2></div>
+              <div className="flex items-center space-x-4 ml-auto">
+                <select value={envFilter} onChange={(e) => setEnvFilter(e.target.value)} className="p-2 border border-gray-300 rounded-full focus:outline-none text-sm">
+                    <option value="all">All Environments</option>
+                    <option value="prod">Production</option>
+                    <option value="nonprod">Non-Production</option>
+                </select>
+              </div>
+          </header>
+        )}
 
         <main>
-          {isBillingLoading && view !== 'settings' && <div className="text-center p-10 font-semibold text-gray-500">Loading Billing Data...</div>}
+          {isBillingLoading && !['settings', 'pricing'].includes(view) && <div className="text-center p-10 font-semibold text-gray-500">Loading Billing Data...</div>}
           
           {!isBillingLoading && view === 'dashboard' && <DashboardView inventory={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} />}
           
@@ -209,6 +228,8 @@ const App = () => {
           {!isBillingLoading && view === 'billing' && <BillingView billingData={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} platformFilter={platformFilter} userRole={userRole} token={token} onUploadSuccess={triggerRefetch}/>}
           
           {view === 'settings' && <SettingsView token={token} currentUserRole={userRole} />}
+          
+          {view === 'pricing' && <PricingView token={token} userRole={userRole} initialTier={initialPricingTier} />}
         </main>
       </div>
     </div>
@@ -216,4 +237,6 @@ const App = () => {
   
   return isLoggedIn ? <AppContent /> : <LoginPage onLogin={handleLogin} error={error} />;
 };
+
 export default App;
+

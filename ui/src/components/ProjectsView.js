@@ -74,8 +74,9 @@ const ServiceBreakdownView = ({ services, selectedMonth, isPrinting = false }) =
                         <ul className="pl-6 mt-1 space-y-1">
                             {data.skus.sort((a,b) => b.cost - a.cost).map((sku, idx) => (
                                 <li key={idx} className="flex justify-between border-l-2 pl-4 border-slate-300">
-                                    <span className="text-gray-600">{sku.sku_description || 'N/A'}</span>
-                                    <span className="font-medium text-gray-600">{formatCurrency(sku.cost)}</span>
+                                    {/* MODIFICATION HERE: Added text-sm class */}
+                                    <span className="text-gray-600 text-sm">{sku.sku_description || 'N/A'}</span>
+                                    <span className="font-medium text-gray-600 text-sm">{formatCurrency(sku.cost)}</span>
                                 </li>
                             ))}
                         </ul>

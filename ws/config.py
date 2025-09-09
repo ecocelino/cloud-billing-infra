@@ -24,3 +24,4 @@ class Config:
     else:
         # Fallback to a simple SQLite database if .env is not configured
         SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"
+

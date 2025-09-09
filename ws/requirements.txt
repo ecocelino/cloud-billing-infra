@@ -8,3 +8,5 @@ PyJWT
 pymysql
 cryptography
 python-dotenv
+gunicorn
+requests

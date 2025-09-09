@@ -54,8 +54,9 @@ const ServiceBreakdownView = ({ services, selectedMonth }) => {
                         <ul className="list-disc pl-10 mt-1 space-y-1">
                             {data.skus.sort((a,b) => b.cost - a.cost).map((sku, idx) => (
                                 <li key={idx} className="flex justify-between">
-                                    <span className="text-gray-600">{sku.sku_description || 'N/A'}</span>
-                                    <span className="font-medium text-gray-600">{formatCurrency(sku.cost)}</span>
+                                    {/* MODIFICATION HERE: Added text-sm to both spans */}
+                                    <span className="text-gray-600 text-sm">{sku.sku_description || 'N/A'}</span>
+                                    <span className="font-medium text-gray-600 text-sm">{formatCurrency(sku.cost)}</span>
                                 </li>
                             ))}
                         </ul>
@@ -295,4 +296,3 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
     );
 };
 export default DashboardView;
-
