@@ -156,6 +156,7 @@ const App = () => {
   };
   
   const handleLogout = () => {
+    setView('dashboard');
     setToken(null);
     setUserRole(null); 
     setIsLoggedIn(false); 
@@ -185,7 +186,7 @@ const App = () => {
                 onClick={() => setIsPricingMenuOpen(!isPricingMenuOpen)}
                 className={`w-full flex justify-between items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'pricing' ? 'bg-gray-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100'}`}
             >
-                <div className="flex items-center space-x-3"><Tag size={20} /><span>Pricing</span></div>
+                <div className="flex items-center space-x-3"><Tag size={20} /><span>Project Pricing</span></div>
                 <ChevronDown size={20} className={`transform transition-transform duration-200 ${isPricingMenuOpen ? 'rotate-180' : ''}`} />
             </button>
             {isPricingMenuOpen && (

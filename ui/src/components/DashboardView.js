@@ -28,7 +28,7 @@ const ServiceBreakdownView = ({ services, selectedMonth }) => {
                     serviceMap.set(serviceName, { totalCost: 0, skus: [] });
                 }
                 const serviceGroup = serviceMap.get(serviceName);
-                const cost = parseFloat(item['cost ($)'] || 0);
+                const cost = parseFloat(item.cost || 0);
                 serviceGroup.totalCost += cost;
                 serviceGroup.skus.push({ ...item, cost });
             });
@@ -54,7 +54,6 @@ const ServiceBreakdownView = ({ services, selectedMonth }) => {
                         <ul className="list-disc pl-10 mt-1 space-y-1">
                             {data.skus.sort((a,b) => b.cost - a.cost).map((sku, idx) => (
                                 <li key={idx} className="flex justify-between">
-                                    {/* MODIFICATION HERE: Added text-sm to both spans */}
                                     <span className="text-gray-600 text-sm">{sku.sku_description || 'N/A'}</span>
                                     <span className="font-medium text-gray-600 text-sm">{formatCurrency(sku.cost)}</span>
                                 </li>
@@ -67,19 +66,24 @@ const ServiceBreakdownView = ({ services, selectedMonth }) => {
     );
 };
 
+
 const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
     const [selectedProjects, setSelectedProjects] = useState([]);
     const [selectedMonth, setSelectedMonth] = useState('all');
     const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
     const [projectSearchTerm, setProjectSearchTerm] = useState('');
     const [rightChartView, setRightChartView] = useState('pie');
+    
     const dropdownRef = useRef(null);
+    // *** FIX 3: Add refs to access the chart instances directly ***
+    const mainBarChartRef = useRef(null);
+    const rightChartRef = useRef(null);
 
+    // Memoized calculations remain the same
     const projectNames = useMemo(() =>
         [...new Set(inventory.map(item => item.project_name).sort())]
     , [inventory]);
     
-    // FIXED: Restored the missing filteredProjectNames hook
     const filteredProjectNames = useMemo(() => {
         if (!projectSearchTerm) return projectNames;
         return projectNames.filter(name =>
@@ -141,8 +145,8 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
                 proj.service_breakdown.forEach(serviceItem => {
                     const serviceName = serviceItem.service_description || serviceItem.sku_description || serviceItem.type || 'Unknown Service';
                     const cost = (selectedMonth === 'all')
-                        ? parseFloat(serviceItem['cost ($)'] || 0)
-                        : (serviceItem.billing_month === selectedMonth ? parseFloat(serviceItem['cost ($)'] || 0) : 0);
+                        ? parseFloat(serviceItem.cost || 0)
+                        : (serviceItem.billing_month === selectedMonth ? parseFloat(serviceItem.cost || 0) : 0);
                     if (cost > 0) {
                         services[serviceName] = (services[serviceName] || 0) + cost;
                     }
@@ -153,24 +157,6 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
             .map(([name, totalCost]) => ({ name, totalCost }))
             .sort((a, b) => b.totalCost - a.totalCost);
     }, [filteredInventory, selectedMonth]);
-
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setIsProjectDropdownOpen(false);
-            }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [dropdownRef]);
-    
-    const handleProjectSelection = (projectName) => {
-        setSelectedProjects(prev =>
-            prev.includes(projectName)
-            ? prev.filter(p => p !== projectName)
-            : [...prev, projectName]
-        );
-    };
     
     const mainBarData = useMemo(() => {
         const monthlyCosts = {};
@@ -199,9 +185,65 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
             datasets: [{ data, backgroundColor: colorPalette, borderColor: '#ffffff', borderWidth: 2 }]
         };
     }, [projectCosts, serviceBreakdown, selectedProjects]);
+    
+    // *** FIX 3: Add a useEffect for manual cleanup on unmount ***
+    useEffect(() => {
+        const mainChart = mainBarChartRef.current;
+        const rightChart = rightChartRef.current;
 
-    const mainBarOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: value => formatCurrency(value) } } } };
-    const rightChartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } };
+        // The returned function is the "cleanup" function.
+        // It runs when this component is unmounted.
+        return () => {
+            if (mainChart) {
+                mainChart.destroy();
+            }
+            if (rightChart) {
+                rightChart.destroy();
+            }
+        };
+    }, []); // The empty array [] means this effect runs only once on mount and cleans up on unmount.
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsProjectDropdownOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+    
+    const handleProjectSelection = (projectName) => {
+        setSelectedProjects(prev =>
+            prev.includes(projectName)
+            ? prev.filter(p => p !== projectName)
+            : [...prev, projectName]
+        );
+    };
+
+    const chartOptionsBase = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+            duration: 0
+        },
+    };
+
+    const mainBarOptions = {
+        ...chartOptionsBase,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { callback: value => formatCurrency(value) } } }
+    };
+
+    const rightChartOptions = {
+        ...chartOptionsBase,
+        plugins: {
+            legend: { position: 'top' },
+            title: { display: true, text: `Cost by ${selectedProjects.length === 1 ? 'Service' : 'Project'}` }
+        }
+    };
+    
+    const rightBarOptions = { ...mainBarOptions, indexAxis: 'y' };
 
     return (
         <div className="space-y-6">
@@ -260,7 +302,12 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
                 <div className="lg:col-span-3 bg-white p-6 rounded-xl shadow-lg">
                     <h3 className="text-lg font-semibold mb-4 text-gray-800">Monthly Cost Breakdown</h3>
                     <div className="h-96 relative">
-                        <Bar data={mainBarData} options={mainBarOptions} />
+                        <Bar
+                            ref={mainBarChartRef}
+                            key={`main-bar-${selectedProjects.join('_')}`}
+                            data={mainBarData}
+                            options={mainBarOptions}
+                        />
                     </div>
                 </div>
                 
@@ -269,19 +316,27 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
                         <h3 className="text-lg font-semibold text-gray-800">
                            {selectedProjects.length === 1 ? 'Service Breakdown' : 'Project Breakdown'}
                         </h3>
-                        {selectedProjects.length === 1 && (
-                            <div className="flex justify-center bg-gray-100 p-1 rounded-lg">
-                                <button onClick={() => setRightChartView('bar')} className={`px-3 py-1 text-sm font-semibold rounded-md flex items-center gap-2 ${rightChartView === 'bar' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChartHorizontal size={16} />Bar</button>
-                                <button onClick={() => setRightChartView('pie')} className={`px-3 py-1 text-sm font-semibold rounded-md flex items-center gap-2 ${rightChartView === 'pie' ? 'bg-white shadow' : 'text-gray-600'}`}><PieChart size={16} />Pie</button>
-                            </div>
-                        )}
+                        <div className="flex justify-center bg-gray-100 p-1 rounded-lg">
+                            <button onClick={() => setRightChartView('bar')} className={`px-3 py-1 text-sm font-semibold rounded-md flex items-center gap-2 ${rightChartView === 'bar' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChartHorizontal size={16} />Bar</button>
+                            <button onClick={() => setRightChartView('pie')} className={`px-3 py-1 text-sm font-semibold rounded-md flex items-center gap-2 ${rightChartView === 'pie' ? 'bg-white shadow' : 'text-gray-600'}`}><PieChart size={16} />Pie</button>
+                        </div>
                     </div>
                     <div className="relative flex-1 h-96">
-                       {rightChartView === 'pie' ? (
-                           <Pie data={rightChartData} options={{...rightChartOptions, plugins: {...rightChartOptions.plugins, title: {display: true, text: `Cost by ${selectedProjects.length === 1 ? 'Service' : 'Project'}`}}}} />
-                       ) : (
-                           <Bar data={rightChartData} options={{...mainBarOptions, indexAxis: 'y'}} />
-                       )}
+                        {rightChartView === 'pie' ? (
+                            <Pie
+                                ref={rightChartRef}
+                                key={`right-pie-${selectedProjects.join('_')}-${selectedMonth}`}
+                                data={rightChartData}
+                                options={rightChartOptions}
+                            />
+                        ) : (
+                            <Bar
+                                ref={rightChartRef}
+                                key={`right-bar-${selectedProjects.join('_')}-${selectedMonth}`}
+                                data={rightChartData}
+                                options={rightBarOptions}
+                            />
+                        )}
                     </div>
                 </div>
             </div>

@@ -8,7 +8,7 @@ const SettingsView = ({ token, currentUserRole }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' });
-    
+
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
     const [editPassword, setEditPassword] = useState('');
@@ -50,7 +50,7 @@ const SettingsView = ({ token, currentUserRole }) => {
         try {
             const response = await fetch(`${API_BASE_URL}/users`, {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'x-access-token': token
                 },
@@ -67,11 +67,11 @@ const SettingsView = ({ token, currentUserRole }) => {
             setError('An error occurred while creating the user.');
         }
     };
-    
+
     const handleDeleteUser = async (userId) => {
         if (window.confirm('Are you sure you want to delete this user?')) {
             try {
-                const response = await fetch(`${API_BASE_URL}/users/${userId}`, { 
+                const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
                     method: 'DELETE',
                     headers: { 'x-access-token': token }
                 });
@@ -96,7 +96,7 @@ const SettingsView = ({ token, currentUserRole }) => {
     const handleUpdateUser = async (e) => {
         e.preventDefault();
         if (!editingUser) return;
-        
+
         const payload = { role: editingUser.role };
         if (editPassword) {
             payload.password = editPassword;
@@ -105,7 +105,7 @@ const SettingsView = ({ token, currentUserRole }) => {
         try {
             const response = await fetch(`${API_BASE_URL}/users/${editingUser.id}`, {
                 method: 'PUT',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'x-access-token': token
                 },
@@ -132,11 +132,12 @@ const SettingsView = ({ token, currentUserRole }) => {
                 <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                     <div className="md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700">Username</label>
-                        <input type="text" name="username" value={newUser.username} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"/>
+                        <input type="text" name="username" value={newUser.username} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" data-gramm="false" autoComplete="username"/>
                     </div>
                     <div className="md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700">Password</label>
-                        <input type="password" name="password" value={newUser.password} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"/>
+                        {/* FIX: Added autocomplete="new-password" */}
+                        <input type="password" name="password" value={newUser.password} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" data-gramm="false" autoComplete="new-password"/>
                     </div>
                     <div className="md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700">Role</label>
@@ -168,15 +169,15 @@ const SettingsView = ({ token, currentUserRole }) => {
                                     <td className="px-6 py-4 whitespace-nowrap">{user.username}</td>
                                     <td className="px-6 py-4 whitespace-nowrap">{user.role}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <button 
-                                            onClick={() => openEditModal(user)} 
+                                        <button
+                                            onClick={() => openEditModal(user)}
                                             className="text-indigo-600 hover:text-indigo-900 disabled:text-gray-400 disabled:cursor-not-allowed"
                                             disabled={currentUserRole === 'admin' && user.role === 'superadmin'}
                                         >
                                             <Edit size={18} />
                                         </button>
-                                        <button 
-                                            onClick={() => handleDeleteUser(user.id)} 
+                                        <button
+                                            onClick={() => handleDeleteUser(user.id)}
                                             className="text-red-600 hover:text-red-900 ml-4 disabled:text-gray-400 disabled:cursor-not-allowed"
                                             disabled={currentUserRole === 'admin' && user.role === 'superadmin'}
                                         >
@@ -189,7 +190,7 @@ const SettingsView = ({ token, currentUserRole }) => {
                     </table>
                 </div>
             </div>
-            
+
             {isEditModalOpen && editingUser && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
@@ -197,8 +198,8 @@ const SettingsView = ({ token, currentUserRole }) => {
                         <form onSubmit={handleUpdateUser} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Role</label>
-                                <select 
-                                    value={editingUser.role} 
+                                <select
+                                    value={editingUser.role}
                                     onChange={(e) => setEditingUser({...editingUser, role: e.target.value})}
                                     className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"
                                     disabled={currentUserRole === 'admin' && editingUser.role === 'superadmin'}
@@ -210,12 +211,15 @@ const SettingsView = ({ token, currentUserRole }) => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">New Password (optional)</label>
-                                <input 
-                                    type="password" 
+                                <input
+                                    type="password"
                                     value={editPassword}
                                     onChange={(e) => setEditPassword(e.target.value)}
                                     placeholder="Leave blank to keep unchanged"
                                     className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"
+                                    data-gramm="false"
+                                    // FIX: Added autocomplete="new-password"
+                                    autoComplete="new-password"
                                 />
                             </div>
                             <div className="flex justify-end gap-4">
@@ -231,4 +235,3 @@ const SettingsView = ({ token, currentUserRole }) => {
 };
 
 export default SettingsView;
-
