@@ -70,12 +70,14 @@ const PricingCard = ({ tier, onTierChange, onRemoveService, onAddService, exchan
                     <tfoot>
                         {isEditable && (<tr><td colSpan="5" className="px-4 py-2"><button onClick={onAddService} className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-semibold py-1 px-2 rounded-md hover:bg-blue-50 transition-colors"><PlusCircle size={16} /> Add Service</button></td></tr>)}
                         <tr className="font-bold text-gray-800 bg-gray-100">
-                            <td colSpan={isEditable ? 4 : 3} className="px-4 py-3 text-right text-lg">Monthly Total (USD)</td>
+                            {/* Corrected colSpan for proper alignment */}
+                            <td colSpan={3} className="px-4 py-3 text-right text-lg">Monthly Total (USD)</td>
                             <td className="px-4 py-3 text-right text-lg">${monthlyTotalUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             {isEditable && <td></td>}
                         </tr>
                         <tr className="font-semibold text-gray-600 bg-gray-50">
-                            <td colSpan={isEditable ? 4 : 3} className="px-4 py-3 text-right">
+                             {/* Corrected colSpan for proper alignment */}
+                            <td colSpan={3} className="px-4 py-3 text-right">
                                 <div>Monthly Total (PHP)</div>
                                 {exchangeRateInfo && (<div className="text-xs font-normal text-gray-500">Rate: ₱{exchangeRateInfo.rate.toFixed(4)} as of {exchangeRateInfo.last_updated}</div>)}
                             </td>
@@ -85,6 +87,11 @@ const PricingCard = ({ tier, onTierChange, onRemoveService, onAddService, exchan
                     </tfoot>
                 </table>
             </div>
+            {/* --- ADDED NOTE --- */}
+            <div className="mt-4 pt-4 border-t border-gray-200 text-center text-xs text-gray-500 italic">
+                *Note: Pricing is based on the Google Cloud Pricing Calculator and is an estimate. Actual costs may vary.
+            </div>
+            {/* --- END NOTE --- */}
         </div>
     );
 };
@@ -108,24 +115,24 @@ const PricingView = ({ token, userRole, initialTier }) => {
             document.body.appendChild(script);
             return script;
         };
-    
+
         if (window.jspdf) {
             setPdfScriptsLoaded(true);
             return;
         }
-    
+
         loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', () => {
             loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js', () => {
                 setPdfScriptsLoaded(true);
             });
         });
-    
+
         return () => {
             const scripts = document.querySelectorAll('script[src*="jspdf"]');
             scripts.forEach(s => s.remove());
         };
     }, []);
-    
+
 
     useEffect(() => { if (initialTier) { setActiveTier(initialTier); } }, [initialTier]);
 
@@ -275,6 +282,17 @@ const PricingView = ({ token, userRole, initialTier }) => {
         });
         // --- End of Fix ---
 
+        // Add the note at the bottom of the PDF
+        const finalY = doc.lastAutoTable.finalY; // Get the Y position after the table
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text(
+            '*Note: Pricing is based on the Google Cloud Pricing Calculator and is an estimate. Actual costs may vary.',
+            14,
+            finalY + 10
+        );
+
+
         doc.save(`${tierData.title.replace(/\s+/g, '-')}.pdf`);
     };
 
@@ -341,4 +359,3 @@ const PricingView = ({ token, userRole, initialTier }) => {
 };
 
 export default PricingView;
-

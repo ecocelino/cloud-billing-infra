@@ -66,8 +66,8 @@ const ServiceBreakdownView = ({ services, selectedMonth, isPrinting = false }) =
                         <span className="font-bold text-gray-800">{formatCurrency(data.totalCost)}</span>
                     </div>
                     <div className="hidden print:flex justify-between items-center p-1">
-                        <span className="font-bold text-gray-800 pl-5">{serviceName}</span>
-                        <span className="font-bold text-gray-800">{formatCurrency(data.totalCost)}</span>
+                        <span className="font-bold text-gray-800 pl-5 text-lg">{serviceName}</span>
+                        <span className="font-bold text-gray-800 text-lg">{formatCurrency(data.totalCost)}</span>
                     </div>
 
                     {(isPrinting || expandedServices[serviceName]) && (
@@ -76,7 +76,7 @@ const ServiceBreakdownView = ({ services, selectedMonth, isPrinting = false }) =
                                 <li key={idx} className="flex justify-between border-l-2 pl-4 border-slate-300">
                                     {/* MODIFICATION HERE: Added text-sm class */}
                                     <span className="text-gray-600 text-sm">{sku.sku_description || 'N/A'}</span>
-                                    <span className="font-medium text-gray-600 text-sm">{formatCurrency(sku.cost)}</span>
+                                    <span className="font-small text-gray-600 text-sm">{formatCurrency(sku.cost)}</span>
                                 </li>
                             ))}
                         </ul>
@@ -300,7 +300,7 @@ const ProjectsView = ({ yearlyData = [], selectedYear, setSelectedYear, envFilte
                 )}
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white divide-y divide-gray-200 text-base">
               {projectsToDisplay.map((project) => (
                 <React.Fragment key={project.project_name}>
                   <tr
@@ -310,7 +310,7 @@ const ProjectsView = ({ yearlyData = [], selectedYear, setSelectedYear, envFilte
                     <td className="px-4 py-4 no-print">
                       {expandedProjects[project.project_name] ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap font-medium">{project.project_name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap font-medium text-base">{project.project_name}</td>
                     {['projectCode', 'environment', 'owner', 'team'].map(field => (
                       <td key={field} className="px-6 py-4 whitespace-nowrap">
                         <span className="no-print">
@@ -324,16 +324,16 @@ const ProjectsView = ({ yearlyData = [], selectedYear, setSelectedYear, envFilte
                                 [project.project_name]: { ...meta[project.project_name], [field]: e.target.value }
                               }))}
                               placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace('Code', ' Code')}
-                              className="p-1 border border-gray-300 rounded w-24"
+                              className="p-1 border border-gray-300 rounded w-24 text-base"
                             />
                           ) : (
                             <span>{projectMeta[project.project_name]?.[field] || ''}</span>
                           )}
                         </span>
-                        <span className="hidden print:inline">{projectMeta[project.project_name]?.[field] || ''}</span>
+                        <span className="hidden print:inline text-base">{projectMeta[project.project_name]?.[field] || ''}</span>
                       </td>
                     ))}
-                    <td className="px-6 py-4 whitespace-nowrap font-bold text-green-600">
+                    <td className="px-6 py-4 whitespace-nowrap font-bold text-green-600 text-base">
                       {formatCurrency(project[`${selectedMonth}_cost`] || 0)}
                     </td>
                     {(userRole === 'admin' || userRole === 'superadmin') && (
@@ -366,9 +366,9 @@ const ProjectsView = ({ yearlyData = [], selectedYear, setSelectedYear, envFilte
                   {(isPrinting || expandedProjects[project.project_name]) && (
                     <tr>
                       <td colSpan={(userRole === 'admin' || userRole === 'superadmin') ? 8 : 7}>
-                        <div className="p-4 bg-slate-100">
+                        <div className="p-4 bg-slate-100 text-sm">
                           <div className="px-8">
-                            <h4 className="font-semibold text-gray-700 mb-2">Service Breakdown:</h4>
+                            <h4 className="font-semibold text-gray-700 mb-2 text-base">Service Breakdown:</h4>
                             <ServiceBreakdownView
                               services={project.service_breakdown}
                               selectedMonth={selectedMonth}
@@ -382,8 +382,8 @@ const ProjectsView = ({ yearlyData = [], selectedYear, setSelectedYear, envFilte
                 </React.Fragment>
               ))}
               <tr className="bg-gray-100 font-bold">
-                <td colSpan="6" className="px-6 py-4 text-right text-gray-800">Grand Total</td>
-                <td className="px-6 py-4 text-green-800 font-extrabold">{formatCurrency(grandTotalToDisplay)}</td>
+                <td colSpan="6" className="px-6 py-4 text-right text-gray-800 text-lg">Grand Total</td>
+                <td className="px-6 py-4 text-green-800 font-extrabold text-lg">{formatCurrency(grandTotalToDisplay)}</td>
                 {(userRole === 'admin' || userRole === 'superadmin') && <td className="no-print"></td>}
               </tr>
             </tbody>
