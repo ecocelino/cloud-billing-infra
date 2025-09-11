@@ -1,3 +1,11 @@
+# /app/ws.py
+
+# --- ADDED: Explicitly add project root to the Python path ---
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# --- END ---
+
 from flask import Flask
 from flask_cors import CORS
 from models import db
@@ -7,7 +15,6 @@ from config import Config
 from routes.users import users_bp
 from routes.billing import billing_bp
 from routes.projects import projects_bp
-# Import the new pricing blueprint
 from routes.pricing import pricing_bp
 
 app = Flask(__name__)
@@ -25,7 +32,6 @@ db.init_app(app)
 app.register_blueprint(users_bp)
 app.register_blueprint(billing_bp)
 app.register_blueprint(projects_bp)
-# Register the new pricing blueprint
 app.register_blueprint(pricing_bp)
 
 if __name__ == "__main__":
@@ -33,4 +39,3 @@ if __name__ == "__main__":
         # This will create tables based on your models in models.py
         db.create_all()
     app.run(host="0.0.0.0", port=5000, debug=True)
-

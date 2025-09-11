@@ -1,8 +1,8 @@
-// src/components/DashboardView.js
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Bar, Pie } from 'react-chartjs-2';
+import React, { useState, useMemo, useEffect, useRef, useContext } from 'react';
+import { GlobalStateContext } from '../context/GlobalStateContext';
+import { Bar, Pie, getElementAtEvent } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend } from 'chart.js';
-import { DollarSign, ChevronDown, TrendingUp, TrendingDown, Target, PieChart, BarChartHorizontal, ChevronRight } from 'lucide-react';
+import { DollarSign, ChevronDown, TrendingUp, TrendingDown, Target, PieChart, BarChartHorizontal, ChevronRight, RefreshCw, BarChart } from 'lucide-react';
 import { formatCurrency } from '../utils.js';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
@@ -67,7 +67,9 @@ const ServiceBreakdownView = ({ services, selectedMonth }) => {
 };
 
 
-const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
+const DashboardView = () => {
+    const { yearlyBillingData: inventory, selectedYear, setSelectedYear } = useContext(GlobalStateContext);
+
     const [selectedProjects, setSelectedProjects] = useState([]);
     const [selectedMonth, setSelectedMonth] = useState('all');
     const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
@@ -75,11 +77,9 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
     const [rightChartView, setRightChartView] = useState('pie');
     
     const dropdownRef = useRef(null);
-    // *** FIX 3: Add refs to access the chart instances directly ***
     const mainBarChartRef = useRef(null);
     const rightChartRef = useRef(null);
 
-    // Memoized calculations remain the same
     const projectNames = useMemo(() =>
         [...new Set(inventory.map(item => item.project_name).sort())]
     , [inventory]);
@@ -95,6 +95,12 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
         if (selectedProjects.length === 0) return inventory;
         return inventory.filter(item => selectedProjects.includes(item.project_name));
     }, [inventory, selectedProjects]);
+    
+    const projectTitleDisplay = useMemo(() => {
+        if (selectedProjects.length === 0) return 'All Projects';
+        if (selectedProjects.length === 1) return selectedProjects[0];
+        return `${selectedProjects.length} Projects`;
+    }, [selectedProjects]);
 
     const calculateCostForPeriod = (item, month) => {
         if (month === 'all') {
@@ -107,19 +113,28 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
         return filteredInventory.reduce((total, item) => total + calculateCostForPeriod(item, selectedMonth), 0);
     }, [filteredInventory, selectedMonth]);
 
-    const costTrend = useMemo(() => {
-        if (selectedMonth === 'all' || months.indexOf(selectedMonth) === 0) {
-            return { percentage: 0, prevMonthCost: 0, isIncrease: false, hasValue: false };
+    const costTrendData = useMemo(() => {
+        if (selectedMonth === 'all') {
+            const totalYearlyCost = filteredInventory.reduce((total, item) => total + calculateCostForPeriod(item, 'all'), 0);
+            const monthsWithData = months.filter(m => filteredInventory.some(item => (item[`${m}_cost`] || 0) > 0)).length;
+            const average = monthsWithData > 0 ? totalYearlyCost / monthsWithData : 0;
+            return { type: 'average', title: 'Avg. Monthly Spend', value: average };
         }
+        
         const currentMonthIndex = months.indexOf(selectedMonth);
+        if (currentMonthIndex === 0) {
+            return { type: 'trend', title: 'MoM Trend', percentage: 0, prevMonthCost: 0, isIncrease: false, hasValue: false };
+        }
         const prevMonth = months[currentMonthIndex - 1];
         const currentMonthCost = filteredInventory.reduce((total, item) => total + calculateCostForPeriod(item, selectedMonth), 0);
         const prevMonthCost = filteredInventory.reduce((total, item) => total + calculateCostForPeriod(item, prevMonth), 0);
+
         if (prevMonthCost === 0) {
-            return { percentage: currentMonthCost > 0 ? 100 : 0, prevMonthCost, isIncrease: currentMonthCost > 0, hasValue: true };
+            const hasValue = currentMonthCost > 0;
+            return { type: 'trend', title: 'MoM Trend', percentage: hasValue ? 100 : 0, prevMonthCost, isIncrease: hasValue, hasValue };
         }
         const percentage = ((currentMonthCost - prevMonthCost) / prevMonthCost) * 100;
-        return { percentage: Math.round(percentage), prevMonthCost, isIncrease: percentage > 0, hasValue: true };
+        return { type: 'trend', title: 'MoM Trend', percentage: Math.round(percentage), prevMonthCost, isIncrease: percentage > 0, hasValue: true };
     }, [filteredInventory, selectedMonth]);
 
     const projectCosts = useMemo(() => {
@@ -164,7 +179,7 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
         filteredInventory.forEach(item => { months.forEach(m => { monthlyCosts[m] += parseFloat(item[`${m}_cost`] || 0); }); });
         return {
             labels: months.map(m => m.charAt(0).toUpperCase() + m.slice(1)),
-            datasets: [{ label: `Total Monthly Cost`, data: months.map(m => monthlyCosts[m]), backgroundColor: colorPalette[0] }],
+            datasets: [{ label: 'Total Monthly Cost', data: months.map(m => monthlyCosts[m]), backgroundColor: colorPalette[0] }],
         };
     }, [filteredInventory]);
 
@@ -186,22 +201,14 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
         };
     }, [projectCosts, serviceBreakdown, selectedProjects]);
     
-    // *** FIX 3: Add a useEffect for manual cleanup on unmount ***
     useEffect(() => {
         const mainChart = mainBarChartRef.current;
         const rightChart = rightChartRef.current;
-
-        // The returned function is the "cleanup" function.
-        // It runs when this component is unmounted.
         return () => {
-            if (mainChart) {
-                mainChart.destroy();
-            }
-            if (rightChart) {
-                rightChart.destroy();
-            }
+            if (mainChart) mainChart.destroy();
+            if (rightChart) rightChart.destroy();
         };
-    }, []); // The empty array [] means this effect runs only once on mount and cleans up on unmount.
+    }, []);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -221,17 +228,56 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
         );
     };
 
+    const handleBarClick = (event) => {
+      if (!mainBarChartRef.current) return;
+      const elements = getElementAtEvent(mainBarChartRef.current, event);
+      if (elements.length > 0) {
+        const monthIndex = elements[0].index;
+        setSelectedMonth(months[monthIndex]);
+      }
+    };
+
     const chartOptionsBase = {
         responsive: true,
         maintainAspectRatio: false,
-        animation: {
-            duration: 0
-        },
+        animation: { duration: 0 },
     };
 
     const mainBarOptions = {
         ...chartOptionsBase,
-        plugins: { legend: { display: false } },
+        plugins: { 
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const label = context.dataset.label || '';
+                        const value = context.parsed.y;
+                        const formattedValue = formatCurrency(value);
+                        
+                        const currentMonthIndex = context.dataIndex;
+                        if (currentMonthIndex === 0) {
+                            return `${label}: ${formattedValue}`;
+                        }
+                        
+                        const prevMonth = months[currentMonthIndex - 1];
+                        const currentMonth = months[currentMonthIndex];
+                        
+                        const currentMonthCost = filteredInventory.reduce((sum, item) => sum + (parseFloat(item[`${currentMonth}_cost`]) || 0), 0);
+                        const prevMonthCost = filteredInventory.reduce((sum, item) => sum + (parseFloat(item[`${prevMonth}_cost`]) || 0), 0);
+
+                        let percentageChange = 0;
+                        if (prevMonthCost !== 0) {
+                            percentageChange = Math.round(((currentMonthCost - prevMonthCost) / prevMonthCost) * 100);
+                        } else if (currentMonthCost > 0) {
+                            percentageChange = 100;
+                        }
+
+                        const trend = percentageChange >= 0 ? `(▲ ${percentageChange}%)` : `(▼ ${Math.abs(percentageChange)}%)`;
+                        return `${label}: ${formattedValue} ${trend}`;
+                    }
+                }
+            }
+        },
         scales: { y: { beginAtZero: true, ticks: { callback: value => formatCurrency(value) } } }
     };
 
@@ -243,7 +289,7 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
         }
     };
     
-    const rightBarOptions = { ...mainBarOptions, indexAxis: 'y' };
+    const rightBarOptions = { ...rightChartOptions, indexAxis: 'y' };
 
     return (
         <div className="space-y-6">
@@ -254,14 +300,24 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
                     <p className="text-3xl font-bold text-gray-900 mt-1">{formatCurrency(totalCostForPeriod)}</p>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-lg text-center flex flex-col justify-center">
-                    {costTrend.isIncrease ? <TrendingUp size={40} className="text-red-500 mb-2 mx-auto" /> : <TrendingDown size={40} className="text-green-500 mb-2 mx-auto" />}
-                    <h3 className="text-xl font-semibold text-gray-800">MoM Trend</h3>
-                    {costTrend.hasValue ? (
-                        <div>
-                            <div className="flex items-center justify-center mt-1"><p className={`text-3xl font-bold ${costTrend.isIncrease ? 'text-red-500' : 'text-green-500'}`}>{costTrend.percentage > 0 ? '+' : ''}{costTrend.percentage}%</p></div>
-                            <p className="text-sm text-gray-500">Prev: {formatCurrency(costTrend.prevMonthCost)}</p>
-                        </div>
-                    ) : (<p className="text-lg text-gray-500 mt-1">Select a month to see trend</p>)}
+                    {costTrendData.type === 'average' ? (
+                        <BarChart size={40} className="text-purple-500 mb-2 mx-auto" />
+                    ) : (
+                        costTrendData.isIncrease ? <TrendingUp size={40} className="text-red-500 mb-2 mx-auto" /> : <TrendingDown size={40} className="text-green-500 mb-2 mx-auto" />
+                    )}
+                    <h3 className="text-xl font-semibold text-gray-800">{costTrendData.title}</h3>
+                    {costTrendData.type === 'average' ? (
+                        <p className="text-3xl font-bold text-gray-900 mt-1">{formatCurrency(costTrendData.value)}</p>
+                    ) : (
+                        costTrendData.hasValue ? (
+                            <div>
+                                <div className="flex items-center justify-center mt-1">
+                                    <p className={`text-3xl font-bold ${costTrendData.isIncrease ? 'text-red-500' : 'text-green-500'}`}>{costTrendData.percentage > 0 ? '+' : ''}{costTrendData.percentage}%</p>
+                                </div>
+                                <p className="text-sm text-gray-500">Prev: {formatCurrency(costTrendData.prevMonthCost)}</p>
+                            </div>
+                        ) : (<p className="text-lg text-gray-500 mt-1">Select a month to see trend</p>)
+                    )}
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-lg text-center flex flex-col justify-center">
                     <Target size={40} className="text-indigo-500 mb-2 mx-auto" />
@@ -300,13 +356,23 @@ const DashboardView = ({ inventory = [], selectedYear, setSelectedYear }) => {
             
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div className="lg:col-span-3 bg-white p-6 rounded-xl shadow-lg">
-                    <h3 className="text-lg font-semibold mb-4 text-gray-800">Monthly Cost Breakdown</h3>
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-semibold text-gray-800 truncate" title={`Monthly Cost Breakdown for ${projectTitleDisplay} (${selectedYear})`}>
+                            Monthly Cost Breakdown for <span className="text-blue-600">{projectTitleDisplay}</span> ({selectedYear})
+                        </h3>
+                        {selectedMonth !== 'all' && (
+                            <button onClick={() => setSelectedMonth('all')} className="flex items-center gap-2 text-sm text-blue-600 hover:underline font-semibold">
+                                <RefreshCw size={14} /> Show All Months
+                            </button>
+                        )}
+                    </div>
                     <div className="h-96 relative">
                         <Bar
                             ref={mainBarChartRef}
                             key={`main-bar-${selectedProjects.join('_')}`}
                             data={mainBarData}
                             options={mainBarOptions}
+                            onClick={handleBarClick}
                         />
                     </div>
                 </div>

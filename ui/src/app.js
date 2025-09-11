@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut, Settings, Filter, Tag, ChevronDown } from 'lucide-react';
+import React, { useState, useContext } from 'react';
+import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
+import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut, Settings, Filter, Tag, ChevronDown, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { GlobalStateProvider, GlobalStateContext } from './context/GlobalStateContext';
 
 // Component Imports
 import LoginPage from './components/LoginPage';
@@ -9,234 +11,128 @@ import BillingView from './components/BillingView';
 import SettingsView from './components/SettingsView';
 import PricingView from './components/PricingView';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// The Sidebar now gets its state from the context
+const Sidebar = () => {
+    const { isSidebarCollapsed, setIsSidebarCollapsed, userRole, logout } = useContext(GlobalStateContext);
+    const [isPricingMenuOpen, setIsPricingMenuOpen] = useState(false);
+    const navigate = useNavigate();
 
-const useYearlyBillingData = (platform, year, token, dataVersion) => {
-  const [processedData, setProcessedData] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchDataAndProcess = async () => {
-      if (!platform || !year || !token) {
-        setProcessedData([]);
-        setIsLoading(false);
-        return;
-      }
-      setIsLoading(true);
-      try {
-        const [billingResponse, metaResponse] = await Promise.all([
-            fetch(`${API_BASE_URL}/billing/services?platform=${platform}&year=${year}`, { headers: { 'x-access-token': token } }),
-            fetch(`${API_BASE_URL}/projects/meta/all`, { headers: { 'x-access-token': token } })
-        ]);
-
-        const rawData = await billingResponse.json();
-        const metaData = await metaResponse.json();
-        
-        if (!Array.isArray(rawData)) {
-            setProcessedData([]);
-            return;
-        }
-
-        const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-        const renameMonthIndex = 4;
-        const transferMonthIndex = 5;
-        const transferYear = 2025;
-
-        const transformedData = rawData.map(item => {
-            let targetProjectName = item.project_name;
-            const monthIndex = months.indexOf(item.billing_month);
-            if (item.project_name === '[Charges not specific to a project]') {
-                if (year < transferYear || (year === transferYear && monthIndex <= renameMonthIndex)) {
-                    targetProjectName = 'Netenrich Resolution Intelligence Cloud';
-                } else if (year > transferYear || (year === transferYear && monthIndex >= transferMonthIndex)) {
-                    targetProjectName = 'ai-research-and-development';
-                }
-            }
-            const servicesToMove = ['Cloud IDS', 'Network Security'];
-            if (item.project_name === 'multisys-hostnet-prod-1' && servicesToMove.includes(item.service_description)) {
-                targetProjectName = 'ms-multipay-prod-1';
-            }
-            return { ...item, project_name: targetProjectName };
-        });
-
-        const projects = {};
-        transformedData.forEach(item => {
-            const projectName = item.project_name;
-            if (!projects[projectName]) {
-                projects[projectName] = { 
-                    project_name: projectName,
-                    platform: item.platform,
-                    billing_year: item.billing_year,
-                    service_breakdown: [] 
-                };
-                months.forEach(m => { projects[projectName][`${m}_cost`] = 0; });
-            }
-            projects[projectName].service_breakdown.push(item);
-            const itemMonth = item.billing_month;
-            if (itemMonth && months.includes(itemMonth)) {
-                 projects[projectName][`${itemMonth}_cost`] += parseFloat(item.cost || 0);
-            }
-        });
-        
-        const finalData = Object.values(projects);
-
-        finalData.forEach(project => {
-            if (metaData[project.project_name]) {
-                project.project_code = metaData[project.project_name].projectCode;
-            } else {
-                project.project_code = '';
-            }
-        });
-
-        setProcessedData(finalData);
-
-      } catch (error) {
-        console.error("Failed to process billing data:", error);
-        setProcessedData([]);
-      } finally {
-        setIsLoading(false);
-      }
+    const handlePricingNavigation = (tier) => {
+        navigate(`/pricing/${tier}`);
     };
-    fetchDataAndProcess();
-  }, [platform, year, token, dataVersion]);
 
-  return { yearlyBillingData: processedData, isBillingLoading: isLoading };
+    const navLinkClasses = "flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors text-gray-700 hover:bg-gray-100";
+    const activeLinkClasses = "bg-blue-500 text-white";
+
+    return (
+        <nav className={`bg-white p-4 shadow-lg flex flex-col sticky top-0 h-screen transition-all duration-300 relative z-10 ${isSidebarCollapsed ? 'w-20 items-center' : 'w-64'}`}>
+            <div className={`flex items-center space-x-2 mb-10 px-2 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
+                <Cloud size={40} className="text-blue-600 flex-shrink-0" />
+                {!isSidebarCollapsed && <h1 className="text-xl font-bold text-gray-900">Cloud Cost System</h1>}
+            </div>
+
+            <div className="flex flex-col space-y-2">
+                <NavLink to="/dashboard" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
+                    <LayoutDashboard size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Dashboard</span>}
+                </NavLink>
+                <NavLink to="/projects" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
+                    <FolderOpen size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Projects</span>}
+                </NavLink>
+                <NavLink to="/billing" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
+                    <BarChart3 size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Billing</span>}
+                </NavLink>
+                
+                <div>
+                    <button onClick={() => setIsPricingMenuOpen(!isPricingMenuOpen)} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors text-gray-700 hover:bg-gray-100 ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+                        <div className="flex items-center space-x-3"><Tag size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Project Pricing</span>}</div>
+                        {!isSidebarCollapsed && <ChevronDown size={20} className={`transform transition-transform duration-200 ${isPricingMenuOpen ? 'rotate-180' : ''}`} />}
+                    </button>
+                    {isPricingMenuOpen && !isSidebarCollapsed && (
+                        <div className="pt-2 pl-6 space-y-1">
+                            <button onClick={() => handlePricingNavigation('basic')} className="w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 text-gray-600">GCP Basic</button>
+                            <button onClick={() => handlePricingNavigation('standard')} className="w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 text-gray-600">GCP Standard</button>
+                            <button onClick={() => handlePricingNavigation('premium')} className="w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 text-gray-600">GCP Premium</button>
+                        </div>
+                    )}
+                </div>
+
+                {(userRole === 'admin' || userRole === 'superadmin') && (
+                    <NavLink to="/settings" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
+                        <Settings size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Settings</span>}
+                    </NavLink>
+                )}
+            </div>
+
+            <div className="mt-auto flex flex-col space-y-2">
+                <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className={`${navLinkClasses} ${isSidebarCollapsed ? 'justify-center' : ''}`}>
+                    {isSidebarCollapsed ? <ChevronsRight size={20} className="flex-shrink-0" /> : <><ChevronsLeft size={20} className="flex-shrink-0" /><span>Collapse Menu</span></>}
+                </button>
+                <button onClick={logout} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium text-gray-700 hover:bg-red-100 hover:text-red-600 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
+                    <LogOut size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Logout</span>}
+                </button>
+            </div>
+        </nav>
+    );
 };
 
-
-const App = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [token, setToken] = useState(null);
-  const [userRole, setUserRole] = useState(null);
-  const [view, setView] = useState('dashboard');
-  const [platformFilter, setPlatformFilter] = useState('GCP');
-  const [envFilter, setEnvFilter] = useState('all');
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [error, setError] = useState('');
-  const [dataVersion, setDataVersion] = useState(0);
-  const triggerRefetch = () => setDataVersion(v => v + 1);
-
-  const [isPricingMenuOpen, setIsPricingMenuOpen] = useState(false);
-  const [initialPricingTier, setInitialPricingTier] = useState('basic');
-
-  const { yearlyBillingData, isBillingLoading } = useYearlyBillingData(platformFilter, selectedYear, token, dataVersion);
-
-  useEffect(() => {
-    const savedToken = localStorage.getItem("authToken");
-    const savedRole = localStorage.getItem("userRole");
-    if (savedToken && savedRole) {
-      setToken(savedToken);
-      setUserRole(savedRole);
-      setIsLoggedIn(true);
-    }
-  }, []);
-  
-  const handleLogin = async (username, password) => {
-    setError('');
-    try {
-      const response = await fetch(`${API_BASE_URL}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setToken(data.token);
-        setUserRole(data.role);
-        setIsLoggedIn(true);
-        localStorage.setItem("authToken", data.token);
-        localStorage.setItem("userRole", data.role);
-      } else {
-        const result = await response.json();
-        setError(result.error || 'Invalid username or password.');
-      }
-    } catch (err) {
-      setError('Login failed. Please ensure the backend is running.');
-    }
-  };
-  
-  const handleLogout = () => {
-    setView('dashboard');
-    setToken(null);
-    setUserRole(null); 
-    setIsLoggedIn(false); 
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("userRole");
-  };
-
-  const handlePricingNavigation = (tier) => {
-    setView('pricing');
-    setInitialPricingTier(tier);
-  };
-
-  const AppContent = () => (
-    <div className="flex min-h-screen bg-slate-100 font-sans">
-      <nav className="w-64 bg-white p-4 shadow-lg flex flex-col sticky top-0 h-screen">
-        <div className="flex items-center space-x-2 mb-10 px-2">
-          <Cloud size={40} className="text-blue-600" />
-          <h1 className="text-xl font-bold text-gray-900">Cloud Cost System</h1>
-        </div>
-        <div className="flex flex-col space-y-2">
-          <button onClick={() => setView('dashboard')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'dashboard' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><LayoutDashboard size={20} /><span>Dashboard</span></button>
-          <button onClick={() => setView('projects')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'projects' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><FolderOpen size={20} /><span>Projects</span></button>
-          <button onClick={() => setView('billing')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'billing' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><BarChart3 size={20} /><span>Billing</span></button>
-          
-          <div>
-            <button
-                onClick={() => setIsPricingMenuOpen(!isPricingMenuOpen)}
-                className={`w-full flex justify-between items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'pricing' ? 'bg-gray-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100'}`}
-            >
-                <div className="flex items-center space-x-3"><Tag size={20} /><span>Project Pricing</span></div>
-                <ChevronDown size={20} className={`transform transition-transform duration-200 ${isPricingMenuOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {isPricingMenuOpen && (
-                <div className="pt-2 pl-6 space-y-1">
-                    <button onClick={() => handlePricingNavigation('basic')} className={`w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 ${ initialPricingTier === 'basic' && view === 'pricing' ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}>GCP Basic</button>
-                    <button onClick={() => handlePricingNavigation('standard')} className={`w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 ${ initialPricingTier === 'standard' && view === 'pricing' ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}>GCP Standard</button>
-                    <button onClick={() => handlePricingNavigation('premium')} className={`w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 ${ initialPricingTier === 'premium' && view === 'pricing' ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}>GCP Premium</button>
-                </div>
-            )}
-          </div>
-
-          {(userRole === 'admin' || userRole === 'superadmin') && (
-            <button onClick={() => setView('settings')} className={`flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${view === 'settings' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}><Settings size={20} /><span>Settings</span></button>
-          )}
-        </div>
-        <button onClick={handleLogout} className="mt-auto flex items-center space-x-3 px-3 py-2 rounded-lg font-medium text-gray-700 hover:bg-red-100 hover:text-red-600"><LogOut size={20} /><span>Logout</span></button>
-      </nav>
-
-      <div className="flex-1 p-4 sm:p-8 overflow-y-auto">
-        {!['settings', 'pricing'].includes(view) && (
-          <header className="flex items-center bg-white p-4 rounded-xl shadow-md mb-6 no-print">
-              <div className="flex items-center space-x-2"><Filter size={20} className="text-gray-600" /><h2 className="text-lg font-semibold text-gray-800">Global Filters</h2></div>
-              <div className="flex items-center space-x-4 ml-auto">
+const GlobalFilters = () => {
+    const { envFilter, setEnvFilter } = useContext(GlobalStateContext);
+    return (
+        <header className="flex items-center bg-white p-4 rounded-xl shadow-md mb-6 no-print">
+            <div className="flex items-center space-x-2"><Filter size={20} className="text-gray-600" /><h2 className="text-lg font-semibold text-gray-800">Global Filters</h2></div>
+            <div className="flex items-center space-x-4 ml-auto">
                 <select value={envFilter} onChange={(e) => setEnvFilter(e.target.value)} className="p-2 border border-gray-300 rounded-full focus:outline-none text-sm">
                     <option value="all">All Environments</option>
                     <option value="prod">Production</option>
                     <option value="nonprod">Non-Production</option>
                 </select>
-              </div>
-          </header>
-        )}
+            </div>
+        </header>
+    );
+};
 
-        <main>
-          {isBillingLoading && !['settings', 'pricing'].includes(view) && <div className="text-center p-10 font-semibold text-gray-500">Loading Billing Data...</div>}
-          
-          {!isBillingLoading && view === 'dashboard' && <DashboardView inventory={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} />}
-          
-          {!isBillingLoading && view === 'projects' && <ProjectsView yearlyData={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} envFilter={envFilter} userRole={userRole} token={token} />}
-          
-          {!isBillingLoading && view === 'billing' && <BillingView billingData={yearlyBillingData} selectedYear={selectedYear} setSelectedYear={setSelectedYear} platformFilter={platformFilter} userRole={userRole} token={token} onUploadSuccess={triggerRefetch}/>}
-          
-          {view === 'settings' && <SettingsView token={token} currentUserRole={userRole} />}
-          
-          {view === 'pricing' && <PricingView token={token} userRole={userRole} initialTier={initialPricingTier} />}
-        </main>
-      </div>
-    </div>
+// This component contains the main application layout
+const AppContent = () => {
+    return (
+        <div className="flex min-h-screen bg-slate-100 font-sans">
+            <Sidebar />
+            <div className="flex-1 p-4 sm:p-8 overflow-y-auto relative z-0">
+                <Routes>
+                    <Route path="/dashboard" element={<DashboardView />} />
+                    <Route path="/projects" element={<><GlobalFilters /><ProjectsView /></>} />
+                    <Route path="/billing" element={<><GlobalFilters /><BillingView /></>} />
+                    <Route path="/pricing/:tier" element={<PricingView />} />
+                    <Route path="/settings" element={<SettingsView />} />
+                    <Route path="/" element={<DashboardView />} />
+                </Routes>
+            </div>
+        </div>
+    );
+};
+
+// This component acts as the main router, deciding to show Login or the App
+const AppRouter = () => {
+    const { isLoggedIn, isAuthLoading, login, authError } = useContext(GlobalStateContext);
+
+    if (isAuthLoading) {
+        return <div className="flex items-center justify-center h-screen font-semibold text-gray-500">Authenticating...</div>;
+    }
+
+    if (!isLoggedIn) {
+        return <LoginPage onLogin={login} error={authError} />;
+    }
+
+    return <AppContent />;
+};
+
+const App = () => {
+  return (
+    <GlobalStateProvider>
+      <BrowserRouter>
+        <AppRouter />
+      </BrowserRouter>
+    </GlobalStateProvider>
   );
-  
-  return isLoggedIn ? <AppContent /> : <LoginPage onLogin={handleLogin} error={error} />;
 };
 
 export default App;

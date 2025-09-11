@@ -1,6 +1,10 @@
+# routes/billing.py
+
 from flask import Blueprint, request, jsonify
 from models import db, Billing, Project
 from services.auth_service import token_required, role_required
+# --- ADDED: Import the new processing function ---
+from services.billing_service import process_billing_data
 import csv
 import io
 import datetime
@@ -41,16 +45,19 @@ def get_billing_services(current_user):
         for s in services
     ]
 
-    return jsonify(result), 200
+    # --- MODIFIED: Process the data before sending it ---
+    processed_result = process_billing_data(result)
+    return jsonify(processed_result), 200
+    # --- END MODIFICATION ---
 
 
 @billing_bp.route("/api/billing/upload_csv", methods=["POST"])
 @token_required
 @role_required(roles=["admin", "superadmin"])
 def upload_csv(current_user):
+    # (No changes needed in this function)
     file = request.files.get("file")
     platform = request.form.get("platform")
-    # Get the selected month and year from the form
     selected_month = request.form.get("month")
     selected_year = request.form.get("year")
 
@@ -58,7 +65,6 @@ def upload_csv(current_user):
         return jsonify({"error": "No file uploaded"}), 400
     if not platform:
         return jsonify({"error": "Platform is required"}), 400
-    # Validate month and year
     if not selected_month or not selected_year:
         return jsonify({"error": "Month and Year for the upload are required"}), 400
 
@@ -73,7 +79,6 @@ def upload_csv(current_user):
         new_project_names = set()
         existing_projects = {p.project_name for p in Project.query.all()}
 
-        # First pass to find and create new projects from the CSV's "Project name" column
         for row in all_data:
             project_name_from_csv = row.get("Project name")
             if project_name_from_csv and project_name_from_csv not in existing_projects:
@@ -89,7 +94,6 @@ def upload_csv(current_user):
         project_map = {p.project_name: p.id for p in Project.query.all()}
         
         billing_rows_to_add = []
-        # Second pass to create billing entries
         for row in all_data:
             project_name_from_csv = row.get("Project name")
             project_id = project_map.get(project_name_from_csv)
@@ -97,7 +101,6 @@ def upload_csv(current_user):
             if not project_id:
                 continue 
             
-            # Use the selected month and year from the form, ignoring the date in the file
             billing = Billing(
                 project_id=project_id,
                 billing_year=int(selected_year),
@@ -124,4 +127,3 @@ def upload_csv(current_user):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
-

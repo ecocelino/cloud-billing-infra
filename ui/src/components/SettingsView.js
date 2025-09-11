@@ -1,19 +1,52 @@
-import React, { useState, useEffect } from 'react';
-import { UserPlus, Trash2, Edit } from 'lucide-react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
+import { GlobalStateContext } from '../context/GlobalStateContext';
+import { UserPlus, Trash2, Edit, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
-const SettingsView = ({ token, currentUserRole }) => {
+const Notification = ({ message, type }) => {
+    if (!message) return null;
+
+    const baseClasses = 'fixed top-5 right-5 p-4 rounded-lg shadow-lg flex items-center gap-3 transition-opacity duration-300 z-50';
+    const typeClasses = {
+        success: 'bg-green-100 text-green-800',
+        error: 'bg-red-100 text-red-800',
+    };
+    const Icon = type === 'success' ? CheckCircle : AlertCircle;
+
+    return (
+        <div className={`${baseClasses} ${typeClasses[type]}`}>
+            <Icon size={20} />
+            <span>{message}</span>
+        </div>
+    );
+};
+
+const SettingsView = () => {
+    const { token, userRole: currentUserRole } = useContext(GlobalStateContext);
+
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState('');
     const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' });
-
+    const [notification, setNotification] = useState({ message: '', type: '' });
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [userToDelete, setUserToDelete] = useState(null);
     const [editingUser, setEditingUser] = useState(null);
     const [editPassword, setEditPassword] = useState('');
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showEditPassword, setShowEditPassword] = useState(false);
 
-    const fetchUsers = async () => {
+    useEffect(() => {
+        if (notification.message) {
+            const timer = setTimeout(() => setNotification({ message: '', type: '' }), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [notification]);
+
+    const fetchUsers = useCallback(async () => {
+        if (!token) return;
+
         try {
             setIsLoading(true);
             const response = await fetch(`${API_BASE_URL}/users`, {
@@ -22,18 +55,18 @@ const SettingsView = ({ token, currentUserRole }) => {
             if (response.ok) {
                 setUsers(await response.json());
             } else {
-                setError('Failed to fetch users.');
+                setNotification({ message: 'Failed to fetch users.', type: 'error' });
             }
         } catch (err) {
-            setError('An error occurred while fetching users.');
+            setNotification({ message: 'An error occurred while fetching users.', type: 'error' });
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [token]);
 
     useEffect(() => {
         fetchUsers();
-    }, [token]);
+    }, [fetchUsers]);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -42,84 +75,85 @@ const SettingsView = ({ token, currentUserRole }) => {
 
     const handleCreateUser = async (e) => {
         e.preventDefault();
-        setError('');
         if (!newUser.username || !newUser.password) {
-            setError('Username and password are required.');
+            setNotification({ message: 'Username and password are required.', type: 'error' });
             return;
         }
         try {
             const response = await fetch(`${API_BASE_URL}/users`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-access-token': token
-                },
+                headers: { 'Content-Type': 'application/json', 'x-access-token': token },
                 body: JSON.stringify(newUser)
             });
+            const result = await response.json();
             if (response.ok) {
+                setNotification({ message: 'User created successfully!', type: 'success' });
                 setNewUser({ username: '', password: '', role: 'user' });
                 fetchUsers();
             } else {
-                const result = await response.json();
-                setError(result.error || 'Failed to create user.');
+                setNotification({ message: result.error || 'Failed to create user.', type: 'error' });
             }
         } catch (err) {
-            setError('An error occurred while creating the user.');
+            setNotification({ message: 'An error occurred while creating the user.', type: 'error' });
         }
     };
 
-    const handleDeleteUser = async (userId) => {
-        if (window.confirm('Are you sure you want to delete this user?')) {
-            try {
-                const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
-                    method: 'DELETE',
-                    headers: { 'x-access-token': token }
-                });
-                if (response.ok) {
-                    fetchUsers();
-                } else {
-                    const result = await response.json();
-                    setError(result.error || 'Failed to delete user.');
-                }
-            } catch (err) {
-                setError('An error occurred while deleting the user.');
+    const openDeleteModal = (user) => {
+        setUserToDelete(user);
+        setIsDeleteModalOpen(true);
+    };
+
+    const handleDeleteUser = async () => {
+        if (!userToDelete) return;
+        try {
+            const response = await fetch(`${API_BASE_URL}/users/${userToDelete.id}`, {
+                method: 'DELETE',
+                headers: { 'x-access-token': token }
+            });
+            if (response.ok) {
+                setNotification({ message: 'User deleted successfully.', type: 'success' });
+                fetchUsers();
+            } else {
+                const result = await response.json();
+                setNotification({ message: result.error || 'Failed to delete user.', type: 'error' });
             }
+        } catch (err) {
+            setNotification({ message: 'An error occurred while deleting the user.', type: 'error' });
+        } finally {
+            setIsDeleteModalOpen(false);
+            setUserToDelete(null);
         }
     };
 
     const openEditModal = (user) => {
         setEditingUser(user);
         setEditPassword('');
+        setShowEditPassword(false);
         setIsEditModalOpen(true);
     };
 
     const handleUpdateUser = async (e) => {
         e.preventDefault();
         if (!editingUser) return;
-
         const payload = { role: editingUser.role };
-        if (editPassword) {
-            payload.password = editPassword;
-        }
+        if (editPassword) payload.password = editPassword;
 
         try {
             const response = await fetch(`${API_BASE_URL}/users/${editingUser.id}`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-access-token': token
-                },
+                headers: { 'Content-Type': 'application/json', 'x-access-token': token },
                 body: JSON.stringify(payload)
             });
             if (response.ok) {
+                setNotification({ message: 'User updated successfully!', type: 'success' });
                 setIsEditModalOpen(false);
                 fetchUsers();
             } else {
                 const result = await response.json();
-                alert(result.error || 'Failed to update user.');
+                setNotification({ message: result.error || 'Failed to update user.', type: 'error' });
             }
         } catch (err) {
-            alert('An error occurred while updating user.');
+            setNotification({ message: 'An error occurred while updating user.', type: 'error' });
         }
     };
 
@@ -127,17 +161,21 @@ const SettingsView = ({ token, currentUserRole }) => {
 
     return (
         <div className="space-y-6">
+            <Notification message={notification.message} type={notification.type} />
+
             <div className="bg-white p-6 rounded-xl shadow-lg">
                 <h3 className="text-2xl font-semibold text-gray-800 mb-4 flex items-center"><UserPlus className="mr-2" />Add New User</h3>
                 <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                     <div className="md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700">Username</label>
-                        <input type="text" name="username" value={newUser.username} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" data-gramm="false" autoComplete="username"/>
+                        <input type="text" name="username" value={newUser.username} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" autoComplete="username"/>
                     </div>
-                    <div className="md:col-span-1">
+                    <div className="md:col-span-1 relative">
                         <label className="block text-sm font-medium text-gray-700">Password</label>
-                        {/* FIX: Added autocomplete="new-password" */}
-                        <input type="password" name="password" value={newUser.password} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" data-gramm="false" autoComplete="new-password"/>
+                        <input type={showNewPassword ? 'text' : 'password'} name="password" value={newUser.password} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" autoComplete="new-password"/>
+                        <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute inset-y-0 right-0 top-6 pr-3 flex items-center text-gray-500">
+                            {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
                     </div>
                     <div className="md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700">Role</label>
@@ -149,7 +187,6 @@ const SettingsView = ({ token, currentUserRole }) => {
                     </div>
                     <button type="submit" className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700">Create User</button>
                 </form>
-                {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
             </div>
 
             <div className="bg-white p-6 rounded-xl shadow-lg">
@@ -164,28 +201,22 @@ const SettingsView = ({ token, currentUserRole }) => {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                            {users.map(user => (
-                                <tr key={user.id}>
-                                    <td className="px-6 py-4 whitespace-nowrap">{user.username}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap">{user.role}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <button
-                                            onClick={() => openEditModal(user)}
-                                            className="text-indigo-600 hover:text-indigo-900 disabled:text-gray-400 disabled:cursor-not-allowed"
-                                            disabled={currentUserRole === 'admin' && user.role === 'superadmin'}
-                                        >
-                                            <Edit size={18} />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteUser(user.id)}
-                                            className="text-red-600 hover:text-red-900 ml-4 disabled:text-gray-400 disabled:cursor-not-allowed"
-                                            disabled={currentUserRole === 'admin' && user.role === 'superadmin'}
-                                        >
-                                            <Trash2 size={18} />
-                                        </button>
-                                    </td>
+                            {users.length === 0 ? (
+                                <tr>
+                                    <td colSpan="3" className="px-6 py-10 text-center text-gray-500">No users found. Add a new user above.</td>
                                 </tr>
-                            ))}
+                            ) : (
+                                users.map(user => (
+                                    <tr key={user.id}>
+                                        <td className="px-6 py-4 whitespace-nowrap">{user.username}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap">{user.role}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            <button onClick={() => openEditModal(user)} className="text-indigo-600 hover:text-indigo-900 disabled:text-gray-400 disabled:cursor-not-allowed" disabled={currentUserRole === 'admin' && user.role === 'superadmin'}><Edit size={18} /></button>
+                                            <button onClick={() => openDeleteModal(user)} className="text-red-600 hover:text-red-900 ml-4 disabled:text-gray-400 disabled:cursor-not-allowed" disabled={currentUserRole === 'admin' && user.role === 'superadmin'}><Trash2 size={18} /></button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -198,35 +229,37 @@ const SettingsView = ({ token, currentUserRole }) => {
                         <form onSubmit={handleUpdateUser} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Role</label>
-                                <select
-                                    value={editingUser.role}
-                                    onChange={(e) => setEditingUser({...editingUser, role: e.target.value})}
-                                    className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"
-                                    disabled={currentUserRole === 'admin' && editingUser.role === 'superadmin'}
-                                >
+                                <select value={editingUser.role} onChange={(e) => setEditingUser({...editingUser, role: e.target.value})} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" disabled={currentUserRole === 'admin' && editingUser.role === 'superadmin'}>
                                     <option value="user">User</option>
                                     <option value="admin">Admin</option>
                                     {currentUserRole === 'superadmin' && <option value="superadmin">SuperAdmin</option>}
                                 </select>
                             </div>
-                            <div>
+                            <div className="relative">
                                 <label className="block text-sm font-medium text-gray-700">New Password (optional)</label>
-                                <input
-                                    type="password"
-                                    value={editPassword}
-                                    onChange={(e) => setEditPassword(e.target.value)}
-                                    placeholder="Leave blank to keep unchanged"
-                                    className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"
-                                    data-gramm="false"
-                                    // FIX: Added autocomplete="new-password"
-                                    autoComplete="new-password"
-                                />
+                                <input type={showEditPassword ? 'text' : 'password'} value={editPassword} onChange={(e) => setEditPassword(e.target.value)} placeholder="Leave blank to keep unchanged" className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" autoComplete="new-password"/>
+                                <button type="button" onClick={() => setShowEditPassword(!showEditPassword)} className="absolute inset-y-0 right-0 top-6 pr-3 flex items-center text-gray-500">
+                                    {showEditPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
                             </div>
-                            <div className="flex justify-end gap-4">
+                            <div className="flex justify-end gap-4 pt-4">
                                 <button type="button" onClick={() => setIsEditModalOpen(false)} className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Cancel</button>
                                 <button type="submit" className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700">Save Changes</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {isDeleteModalOpen && userToDelete && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+                        <h3 className="text-xl font-semibold mb-2">Delete User</h3>
+                        <p className="text-gray-600 mb-6">Are you sure you want to delete the user <span className="font-bold">{userToDelete.username}</span>? This action cannot be undone.</p>
+                        <div className="flex justify-end gap-4">
+                            <button type="button" onClick={() => setIsDeleteModalOpen(false)} className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Cancel</button>
+                            <button type="button" onClick={handleDeleteUser} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700">Delete User</button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -235,3 +268,4 @@ const SettingsView = ({ token, currentUserRole }) => {
 };
 
 export default SettingsView;
+

@@ -10,3 +10,4 @@ cryptography
 python-dotenv
 gunicorn
 requests
+pytest
