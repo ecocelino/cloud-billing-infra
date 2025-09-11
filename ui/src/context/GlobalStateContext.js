@@ -5,7 +5,6 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api
 export const GlobalStateContext = createContext();
 
 const useYearlyBillingData = (platform, year, token, dataVersion) => {
-  // --- FIX: This state now holds data for both years ---
   const [processedData, setProcessedData] = useState({ current: [], previous: [] });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -18,7 +17,6 @@ const useYearlyBillingData = (platform, year, token, dataVersion) => {
       }
       setIsLoading(true);
       try {
-        // The API now fetches both current and previous year data in one call
         const response = await fetch(`${API_BASE_URL}/billing/services?platform=${platform}&year=${year}`, { headers: { 'x-access-token': token } });
         
         if (!response.ok) {
@@ -34,7 +32,6 @@ const useYearlyBillingData = (platform, year, token, dataVersion) => {
 
         const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
-        // Helper function to aggregate data for a specific year
         const aggregateDataForYear = (targetYear, data) => {
             const projects = {};
             const yearData = data.filter(d => d.billing_year === targetYear);
@@ -43,6 +40,8 @@ const useYearlyBillingData = (platform, year, token, dataVersion) => {
                 const projectName = item.project_name;
                 if (!projects[projectName]) {
                     projects[projectName] = { 
+                        // --- FIX: Ensure project_id is preserved during aggregation ---
+                        project_id: item.project_id,
                         project_name: projectName,
                         platform: item.platform,
                         billing_year: item.billing_year,
@@ -59,9 +58,24 @@ const useYearlyBillingData = (platform, year, token, dataVersion) => {
             return Object.values(projects);
         };
         
-        // Process data for both the current and previous year
         const currentYearData = aggregateDataForYear(year, rawData);
         const previousYearData = aggregateDataForYear(year - 1, rawData);
+        
+        // --- Add project codes to the final data ---
+        const metaResponse = await fetch(`${API_BASE_URL}/projects/meta/all`, { headers: { 'x-access-token': token } });
+        if(metaResponse.ok) {
+            const metaData = await metaResponse.json();
+            currentYearData.forEach(project => {
+                if (metaData[project.project_name]) {
+                    project.project_code = metaData[project.project_name].projectCode;
+                }
+            });
+             previousYearData.forEach(project => {
+                if (metaData[project.project_name]) {
+                    project.project_code = metaData[project.project_name].projectCode;
+                }
+            });
+        }
 
         setProcessedData({ current: currentYearData, previous: previousYearData });
 
@@ -75,7 +89,6 @@ const useYearlyBillingData = (platform, year, token, dataVersion) => {
     fetchDataAndProcess();
   }, [platform, year, token, dataVersion]);
 
-  // Return the structured data
   return { 
       yearlyBillingData: processedData.current, 
       previousYearBillingData: processedData.previous,
@@ -99,7 +112,6 @@ export const GlobalStateProvider = ({ children }) => {
   
   const triggerRefetch = () => setDataVersion(v => v + 1);
 
-  // --- FIX: The hook now provides both years' data ---
   const { yearlyBillingData, previousYearBillingData, isBillingLoading } = useYearlyBillingData(platformFilter, selectedYear, token, dataVersion);
   
   useEffect(() => {
@@ -157,7 +169,7 @@ export const GlobalStateProvider = ({ children }) => {
     envFilter, setEnvFilter,
     selectedYear, setSelectedYear,
     yearlyBillingData,
-    previousYearBillingData, // <-- Pass previous year data
+    previousYearBillingData,
     isBillingLoading,
     triggerRefetch,
     isSidebarCollapsed, 
@@ -170,3 +182,4 @@ export const GlobalStateProvider = ({ children }) => {
     </GlobalStateContext.Provider>
   );
 };
+
