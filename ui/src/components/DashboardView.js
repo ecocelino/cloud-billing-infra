@@ -69,7 +69,6 @@ const ServiceBreakdownView = ({ services, selectedMonth }) => {
 
 
 const DashboardView = () => {
-    // --- FIX: Get both current and previous year's data from context ---
     const { yearlyBillingData: inventory, previousYearBillingData, selectedYear, setSelectedYear } = useContext(GlobalStateContext);
 
     const [selectedProjects, setSelectedProjects] = useState([]);
@@ -93,7 +92,6 @@ const DashboardView = () => {
         );
     }, [projectNames, projectSearchTerm]);
     
-    // --- FIX: Filter both current and previous year's data based on selected projects ---
     const filteredInventory = useMemo(() => {
         if (selectedProjects.length === 0) return inventory;
         return inventory.filter(item => selectedProjects.includes(item.project_name));
@@ -123,15 +121,21 @@ const DashboardView = () => {
 
     const costTrendData = useMemo(() => {
         if (selectedMonth === 'all') {
-            const totalYearlyCost = filteredInventory.reduce((total, item) => total + calculateCostForPeriod(item, 'all'), 0);
-            const monthsWithData = months.filter(m => filteredInventory.some(item => (item[`${m}_cost`] || 0) > 0)).length;
-            const average = monthsWithData > 0 ? totalYearlyCost / monthsWithData : 0;
-            return { type: 'average', title: 'Avg. Monthly Spend', value: average };
+            const currentYearTotal = filteredInventory.reduce((total, item) => total + calculateCostForPeriod(item, 'all'), 0);
+            const previousYearTotal = filteredPreviousYearInventory.reduce((total, item) => total + calculateCostForPeriod(item, 'all'), 0);
+            
+            if (previousYearTotal === 0) {
+                const hasValue = currentYearTotal > 0;
+                return { type: 'yoy', title: 'YoY Trend', percentage: hasValue ? 100 : 0, prevYearCost: previousYearTotal, isIncrease: hasValue, hasValue };
+            }
+
+            const percentage = ((currentYearTotal - previousYearTotal) / previousYearTotal) * 100;
+            return { type: 'yoy', title: 'YoY Trend', percentage: Math.round(percentage), prevYearCost: previousYearTotal, isIncrease: percentage > 0, hasValue: true };
         }
         
         const currentMonthIndex = months.indexOf(selectedMonth);
         if (currentMonthIndex === 0) {
-            return { type: 'trend', title: 'MoM Trend', percentage: 0, prevMonthCost: 0, isIncrease: false, hasValue: false };
+            return { type: 'mom', title: 'MoM Trend', percentage: 0, prevMonthCost: 0, isIncrease: false, hasValue: false };
         }
         const prevMonth = months[currentMonthIndex - 1];
         const currentMonthCost = filteredInventory.reduce((total, item) => total + calculateCostForPeriod(item, selectedMonth), 0);
@@ -139,11 +143,20 @@ const DashboardView = () => {
 
         if (prevMonthCost === 0) {
             const hasValue = currentMonthCost > 0;
-            return { type: 'trend', title: 'MoM Trend', percentage: hasValue ? 100 : 0, prevMonthCost, isIncrease: hasValue, hasValue };
+            return { type: 'mom', title: 'MoM Trend', percentage: hasValue ? 100 : 0, prevMonthCost, isIncrease: hasValue, hasValue };
         }
         const percentage = ((currentMonthCost - prevMonthCost) / prevMonthCost) * 100;
-        return { type: 'trend', title: 'MoM Trend', percentage: Math.round(percentage), prevMonthCost, isIncrease: percentage > 0, hasValue: true };
-    }, [filteredInventory, selectedMonth]);
+        return { type: 'mom', title: 'MoM Trend', percentage: Math.round(percentage), prevMonthCost, isIncrease: percentage > 0, hasValue: true };
+    }, [filteredInventory, filteredPreviousYearInventory, selectedMonth]);
+
+    // --- FIX: Add a separate calculation for Average Monthly Spend ---
+    const averageMonthlySpend = useMemo(() => {
+        const totalYearlyCost = filteredInventory.reduce((total, item) => total + calculateCostForPeriod(item, 'all'), 0);
+        // Only count months that actually have data to avoid skewing the average
+        const monthsWithData = months.filter(m => filteredInventory.some(item => (item[`${m}_cost`] || 0) > 0)).length;
+        return monthsWithData > 0 ? totalYearlyCost / monthsWithData : 0;
+    }, [filteredInventory]);
+    // --- END FIX ---
 
     const projectCosts = useMemo(() => {
         const projects = {};
@@ -181,7 +194,6 @@ const DashboardView = () => {
             .sort((a, b) => b.totalCost - a.totalCost);
     }, [filteredInventory, selectedMonth]);
     
-    // --- FIX: Updated mainBarData to include both years ---
     const mainBarData = useMemo(() => {
         const calculateMonthlyCosts = (data) => {
             const monthlyCosts = {};
@@ -273,7 +285,7 @@ const DashboardView = () => {
     const mainBarOptions = {
         ...chartOptionsBase,
         plugins: { 
-            legend: { position: 'top' }, // Show the legend for the years
+            legend: { position: 'top' },
             tooltip: {
                 callbacks: {
                     label: function(context) {
@@ -302,31 +314,32 @@ const DashboardView = () => {
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* --- FIX: Changed grid layout to accommodate four cards --- */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
                 <div className="bg-white p-6 rounded-xl shadow-lg text-center flex flex-col justify-center">
                     <DollarSign size={40} className="text-green-600 mb-2 mx-auto" />
                     <h3 className="text-xl font-semibold text-gray-800">Total Spend ({selectedMonth === 'all' ? selectedYear : selectedMonth.charAt(0).toUpperCase() + selectedMonth.slice(1)})</h3>
                     <p className="text-3xl font-bold text-gray-900 mt-1">{formatCurrency(totalCostForPeriod)}</p>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-lg text-center flex flex-col justify-center">
-                    {costTrendData.type === 'average' ? (
-                        <BarChart size={40} className="text-purple-500 mb-2 mx-auto" />
-                    ) : (
-                        costTrendData.isIncrease ? <TrendingUp size={40} className="text-red-500 mb-2 mx-auto" /> : <TrendingDown size={40} className="text-green-500 mb-2 mx-auto" />
-                    )}
+                    {costTrendData.isIncrease ? <TrendingUp size={40} className="text-red-500 mb-2 mx-auto" /> : <TrendingDown size={40} className="text-green-500 mb-2 mx-auto" />}
                     <h3 className="text-xl font-semibold text-gray-800">{costTrendData.title}</h3>
-                    {costTrendData.type === 'average' ? (
-                        <p className="text-3xl font-bold text-gray-900 mt-1">{formatCurrency(costTrendData.value)}</p>
-                    ) : (
-                        costTrendData.hasValue ? (
-                            <div>
-                                <div className="flex items-center justify-center mt-1">
-                                    <p className={`text-3xl font-bold ${costTrendData.isIncrease ? 'text-red-500' : 'text-green-500'}`}>{costTrendData.percentage > 0 ? '+' : ''}{costTrendData.percentage}%</p>
-                                </div>
-                                <p className="text-sm text-gray-500">Prev: {formatCurrency(costTrendData.prevMonthCost)}</p>
+                    {costTrendData.hasValue ? (
+                        <div>
+                            <div className="flex items-center justify-center mt-1">
+                                <p className={`text-3xl font-bold ${costTrendData.isIncrease ? 'text-red-500' : 'text-green-500'}`}>{costTrendData.percentage > 0 ? '+' : ''}{costTrendData.percentage}%</p>
                             </div>
-                        ) : (<p className="text-lg text-gray-500 mt-1">Select a month to see trend</p>)
-                    )}
+                            <p className="text-sm text-gray-500">
+                                {costTrendData.type === 'yoy' ? `vs ${selectedYear - 1}: ${formatCurrency(costTrendData.prevYearCost)}` : `Prev: ${formatCurrency(costTrendData.prevMonthCost)}`}
+                            </p>
+                        </div>
+                    ) : (<p className="text-lg text-gray-500 mt-1">Not enough data for trend</p>)}
+                </div>
+                {/* --- FIX: Added new card for Average Monthly Spend --- */}
+                <div className="bg-white p-6 rounded-xl shadow-lg text-center flex flex-col justify-center">
+                    <BarChart size={40} className="text-purple-500 mb-2 mx-auto" />
+                    <h3 className="text-xl font-semibold text-gray-800">Avg. Monthly Spend ({selectedYear})</h3>
+                    <p className="text-3xl font-bold text-gray-900 mt-1">{formatCurrency(averageMonthlySpend)}</p>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-lg text-center flex flex-col justify-center">
                     <Target size={40} className="text-indigo-500 mb-2 mx-auto" />
@@ -426,3 +439,4 @@ const DashboardView = () => {
     );
 };
 export default DashboardView;
+
