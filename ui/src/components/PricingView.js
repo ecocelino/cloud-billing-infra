@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo, useContext } from 'react';
 import { useParams } from 'react-router-dom';
 import { GlobalStateContext } from '../context/GlobalStateContext';
-import { Server, Database, Cpu, Trash2, PlusCircle, AlertCircle, CheckCircle, Download, Loader2 } from 'lucide-react';
+import { Server, Database, Cpu, Trash2, PlusCircle, AlertCircle, CheckCircle, Download, Loader2, RefreshCw } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -9,31 +11,14 @@ const ReadOnlyField = ({ value, className = '' }) => (<span className={`text-gra
 
 const EditableField = ({ initialValue, onDebouncedChange, type = 'text', className = '' }) => {
     const [value, setValue] = useState(initialValue);
-
-    useEffect(() => {
-        setValue(initialValue);
-    }, [initialValue]);
-
+    useEffect(() => { setValue(initialValue); }, [initialValue]);
     useEffect(() => {
         const handler = setTimeout(() => {
-            if (value !== initialValue) {
-                onDebouncedChange(value);
-            }
-        }, 400); 
-
-        return () => {
-            clearTimeout(handler);
-        };
+            if (value !== initialValue) { onDebouncedChange(value); }
+        }, 400);
+        return () => { clearTimeout(handler); };
     }, [value, initialValue, onDebouncedChange]);
-
-    return (
-        <input
-            type={type}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            className={`w-full bg-transparent border-b-2 border-transparent focus:outline-none focus:border-blue-500 transition-all p-1 -m-1 rounded-md ${className}`}
-        />
-    );
+    return ( <input type={type} value={value} onChange={(e) => setValue(e.target.value)} className={`w-full bg-transparent border-b-2 border-transparent focus:outline-none focus:border-blue-500 transition-all p-1 -m-1 rounded-md ${className}`} /> );
 };
 
 const PricingCard = ({ tier, onTierChange, onRemoveService, onAddService, exchangeRateInfo, isEditable }) => {
@@ -51,7 +36,7 @@ const PricingCard = ({ tier, onTierChange, onRemoveService, onAddService, exchan
     const monthlyTotalPHP = monthlyTotalUSD * (exchangeRateInfo?.rate || 0);
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-lg flex flex-col h-full border border-gray-200" id="pricing-card-content">
+        <div className="bg-white p-6 rounded-xl shadow-lg flex flex-col h-full border border-gray-200 printable-content">
             <h3 className="text-2xl font-bold text-gray-800 mb-4">{tier.title}</h3>
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left text-gray-600">
@@ -93,9 +78,15 @@ const PricingCard = ({ tier, onTierChange, onRemoveService, onAddService, exchan
                         <tr className="font-semibold text-gray-600 bg-gray-50">
                             <td colSpan={3} className="px-4 py-3 text-right">
                                 <div>Monthly Total (PHP)</div>
-                                {exchangeRateInfo && (<div className="text-xs font-normal text-gray-500">Rate: ₱{exchangeRateInfo.rate.toFixed(4)} as of {exchangeRateInfo.last_updated}</div>)}
+                                {exchangeRateInfo ? (
+                                    <div className="text-xs font-normal text-gray-500">Rate: ₱{exchangeRateInfo.rate.toFixed(4)} as of {exchangeRateInfo.last_updated}</div>
+                                ) : (
+                                    <div className="text-xs font-normal text-red-500">Rate not available</div>
+                                )}
                             </td>
-                            <td className="px-4 py-3 text-right">₱{monthlyTotalPHP.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td className="px-4 py-3 text-right">
+                                {exchangeRateInfo ? `₱${monthlyTotalPHP.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}
+                            </td>
                             {isEditable && <td></td>}
                         </tr>
                     </tfoot>
@@ -109,7 +100,6 @@ const PricingCard = ({ tier, onTierChange, onRemoveService, onAddService, exchan
 };
 
 const PricingView = () => {
-    // --- FIX: Get token and role from context, tier from URL params ---
     const { token, userRole } = useContext(GlobalStateContext);
     const { tier: initialTier } = useParams();
 
@@ -120,42 +110,17 @@ const PricingView = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [saveStatus, setSaveStatus] = useState({ message: '', type: '' });
     const [activeTier, setActiveTier] = useState(initialTier || 'basic');
-    const [scriptStatus, setScriptStatus] = useState({ jspdf: false, autotable: false });
+    const [isUpdatingRate, setIsUpdatingRate] = useState(false);
+    const [updateStatus, setUpdateStatus] = useState({ message: '', type: 'idle' });
 
     const isEditable = userRole === 'admin' || userRole === 'superadmin';
-
-    useEffect(() => {
-        const loadScript = (src, onLoad) => {
-            if (document.querySelector(`script[src="${src}"]`)) {
-                onLoad();
-                return;
-            }
-            const script = document.createElement('script');
-            script.src = src;
-            script.onload = onLoad;
-            document.body.appendChild(script);
-        };
-
-        if (window.jspdf && window.jspdf.jsPDF.autoTable) {
-            setScriptStatus({ jspdf: true, autotable: true });
-            return;
-        }
-
-        loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', () => {
-            setScriptStatus(s => ({ ...s, jspdf: true }));
-            loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js', () => {
-                setScriptStatus(s => ({ ...s, autotable: true }));
-            });
-        });
-    }, []);
 
     useEffect(() => { 
         if (initialTier) { setActiveTier(initialTier); } 
     }, [initialTier]);
 
-    // --- FIX: Correctly structured data fetching hook ---
     const fetchPricingData = useCallback(async () => {
-        if (!token) return; // Guard against running without a token
+        if (!token) return;
         setIsLoading(true);
         setError(null);
         try {
@@ -177,8 +142,27 @@ const PricingView = () => {
     useEffect(() => {
         fetchPricingData();
     }, [fetchPricingData]);
-    // --- END FIX ---
 
+    const handleUpdateRate = async () => {
+        setIsUpdatingRate(true);
+        setUpdateStatus({ message: 'Fetching latest rate...', type: 'loading' });
+        try {
+            const response = await fetch(`${API_BASE_URL}/exchange-rate/update`, {
+                method: 'POST',
+                headers: { 'x-access-token': token }
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error);
+            setUpdateStatus({ message: result.message, type: 'success' });
+            fetchPricingData();
+        } catch (err) {
+            setUpdateStatus({ message: err.message, type: 'error' });
+        } finally {
+            setIsUpdatingRate(false);
+             setTimeout(() => setUpdateStatus({ message: '', type: 'idle' }), 5000);
+        }
+    };
+    
     const handleTierChange = (tierKey, updatedTier) => {
         const newPricingData = { ...pricingData, [tierKey]: updatedTier };
         const monthlyTotalUSD = updatedTier.services.reduce((acc, service) => acc + (parseFloat(service.price) || 0), 0);
@@ -226,38 +210,29 @@ const PricingView = () => {
     };
 
     const handleExportPDF = () => {
-        if (!pricingData || !activeTier || !(scriptStatus.jspdf && scriptStatus.autotable)) return;
-
+        if (!pricingData || !activeTier) return;
         const tierData = pricingData[activeTier];
-        const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-
         doc.setFontSize(18);
         doc.text(tierData.title, 14, 22);
-
         doc.setFontSize(10);
         if (pricingData.exchange_rate_info) {
              const exchangeInfo = `Exchange Rate: ₱${pricingData.exchange_rate_info.rate.toFixed(4)} as of ${pricingData.exchange_rate_info.last_updated}`;
              doc.text(exchangeInfo, 14, 30);
         }
-
         const tableColumn = ["Service", "Instance", "Specs", "Price (USD)"];
         const tableRows = [];
-
         tierData.services.forEach(service => {
             const specs = [ service.specs_vcpu || '', service.specs_memory || '', service.storage || '' ].filter(Boolean).join('\n');
             const serviceData = [ service.service_name, service.instance, specs, { content: `$${parseFloat(service.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right' } } ];
             tableRows.push(serviceData);
         });
-
         const monthlyTotalUSD = tierData.services.reduce((acc, service) => acc + (parseFloat(service.price) || 0), 0);
         const monthlyTotalPHP = monthlyTotalUSD * (pricingData.exchange_rate_info?.rate || 0);
-
         tableRows.push([{ content: '', colSpan: 4, styles: { minCellHeight: 4 } }]);
         tableRows.push([ { content: 'Monthly Total (USD):', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', fontSize: 12 } }, { content: `$${monthlyTotalUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right', fontStyle: 'bold', fontSize: 12 } } ]);
         tableRows.push([ { content: 'Monthly Total (PHP):', colSpan: 3, styles: { halign: 'right', fontSize: 11, textColor: [100, 100, 100] } }, { content: `₱${monthlyTotalPHP.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'left', fontSize: 11, textColor: [100, 100, 100] } } ]);
-
-        doc.autoTable({
+        autoTable(doc, {
             head: [tableColumn],
             body: tableRows,
             startY: 35,
@@ -271,8 +246,7 @@ const PricingView = () => {
                 }
             }
         });
-
-        const finalY = doc.lastAutoTable.finalY;
+        const finalY = doc.autoTable.previous.finalY;
         doc.setFontSize(8);
         doc.setTextColor(150);
         doc.text( '*Note: Pricing is based on the Google Cloud Pricing Calculator and is an estimate. Actual costs may vary.', 14, finalY + 10 );
@@ -283,16 +257,6 @@ const PricingView = () => {
         JSON.stringify(pricingData) !== JSON.stringify(originalData), 
         [pricingData, originalData]
     );
-    
-    const pdfButtonState = useMemo(() => {
-        if (scriptStatus.jspdf && scriptStatus.autotable) {
-            return { text: 'Export PDF', disabled: false };
-        }
-        if (scriptStatus.jspdf) {
-            return { text: 'Loading PDF Table...', disabled: true };
-        }
-        return { text: 'Loading PDF Library...', disabled: true };
-    }, [scriptStatus]);
 
     if (isLoading) return <div className="text-center p-10 font-semibold text-gray-500">Loading Pricing Data...</div>;
     if (error) return <div className="text-center p-10 font-semibold text-red-500 bg-red-100 rounded-lg">{error}</div>;
@@ -310,37 +274,50 @@ const PricingView = () => {
     );
 
     return (
-        <div className="space-y-6">
-            <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="space-y-6 printable-content">
+            <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 no-print">
                 <div>
                     <h2 className="text-3xl font-bold text-gray-900 tracking-tight">GCP Infrastructure Pricing</h2>
                     <p className="mt-1 text-gray-600">Details for the selected pricing tier.</p>
                 </div>
                  <div className="flex flex-col items-stretch gap-y-4 sm:flex-row sm:items-center sm:gap-x-4">
                     {isEditable && (
-                        <div className="flex flex-col items-stretch gap-y-4 sm:flex-row-reverse sm:items-center sm:gap-x-4">
-                            <button onClick={handleSave} disabled={!hasChanges || isSaving} className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed flex-shrink-0">
-                                {isSaving ? <><Loader2 size={20} className="animate-spin mr-2"/>Saving...</> : 'Save Changes'}
+                        <>
+                            <button onClick={handleUpdateRate} disabled={isUpdatingRate} className="flex items-center justify-center gap-2 bg-teal-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-teal-600 transition-all flex-shrink-0 disabled:bg-gray-400">
+                                {isUpdatingRate ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
+                                <span>Update Rate</span>
                             </button>
-                            {hasChanges && !isSaving && (
-                                <button onClick={handleCancel} className="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-300 transition-all flex-shrink-0">
-                                    Cancel
+
+                            <div className="flex flex-col items-stretch gap-y-4 sm:flex-row-reverse sm:items-center sm:gap-x-4">
+                                <button onClick={handleSave} disabled={!hasChanges || isSaving} className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed flex-shrink-0">
+                                    {isSaving ? <><Loader2 size={20} className="animate-spin mr-2"/>Saving...</> : 'Save Changes'}
                                 </button>
-                            )}
-                            {saveStatus.message && (
-                                <div className={`flex items-center gap-2 p-2 rounded-md text-sm ${saveStatus.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                    {saveStatus.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
-                                    {saveStatus.message}
-                                </div>
-                            )}
-                        </div>
+                                {hasChanges && !isSaving && (
+                                    <button onClick={handleCancel} className="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-300 transition-all flex-shrink-0">
+                                        Cancel
+                                    </button>
+                                )}
+                                {saveStatus.message && (
+                                    <div className={`flex items-center gap-2 p-2 rounded-md text-sm ${saveStatus.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                        {saveStatus.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+                                        {saveStatus.message}
+                                    </div>
+                                )}
+                            </div>
+                        </>
                     )}
-                    <button onClick={handleExportPDF} disabled={pdfButtonState.disabled} className="flex items-center justify-center gap-2 bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-700 transition-all flex-shrink-0 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                    <button onClick={handleExportPDF} className="flex items-center justify-center gap-2 bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-700 transition-all flex-shrink-0">
                        <Download size={18} />
-                       <span>{pdfButtonState.text}</span>
+                       <span>Export PDF</span>
                     </button>
                 </div>
             </header>
+            
+            {updateStatus.message && (
+                <div className={`text-center text-sm font-medium p-2 rounded-md no-print ${updateStatus.type === 'success' ? 'bg-green-100 text-green-800' : updateStatus.type === 'error' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`}>
+                    {updateStatus.message}
+                </div>
+            )}
             
             <div className="mt-6">
                 {pricingData && activeTier && pricingData[activeTier] ? (
@@ -356,3 +333,4 @@ const PricingView = () => {
 };
 
 export default PricingView;
+

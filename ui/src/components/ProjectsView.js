@@ -3,7 +3,7 @@ import { GlobalStateContext } from '../context/GlobalStateContext';
 import { ChevronRight, ChevronDown, FileDown, X } from 'lucide-react';
 import { formatCurrency } from '../utils.js';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL;
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const years = [2023, 2024, 2025, 2026, 2027];
 
@@ -106,8 +106,8 @@ const ProjectsView = () => {
         let dataForYear = yearlyData.filter(p => p.billing_year === selectedYear);
         let filtered = dataForYear;
         if (envFilter !== 'all') {
-            const envLower = envFilter === 'prod' ? 'production' : 'non-production';
-            filtered = filtered.filter(p => (projectMeta[p.project_name]?.environment || '').toLowerCase() === envLower);
+            const envLower = envFilter === 'prod' ? 'Production' : 'Non-Production';
+            filtered = filtered.filter(p => (projectMeta[p.project_name]?.environment || '') === envLower);
         }
         const term = searchTerm.trim().toLowerCase();
         if (term) {
@@ -270,7 +270,7 @@ const ProjectsView = () => {
     const grandTotalToDisplay = projectsToDisplay.reduce((sum, p) => sum + (p[`${selectedMonth}_cost`] || 0), 0);
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-lg">
+        <div className="bg-white p-6 rounded-xl shadow-lg printable-content">
             <div className="no-print">
                 <h3 className="text-2xl font-semibold text-gray-800 mb-4">Projects Overview</h3>
                 <div className="flex flex-wrap items-center gap-4 mb-4">
@@ -343,7 +343,7 @@ const ProjectsView = () => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Environment</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Team</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                                 Total Cost ({selectedMonth.toUpperCase()})
                                 </th>
                                 {(userRole === 'admin' || userRole === 'superadmin') && (
@@ -366,17 +366,34 @@ const ProjectsView = () => {
                                     <td key={field} className="px-6 py-4 whitespace-nowrap">
                                         <span className="no-print">
                                         {editingProject === project.project_name && (userRole === 'admin' || userRole === 'superadmin') ? (
-                                            <input
-                                            type="text"
-                                            value={projectMeta[project.project_name]?.[field] || ''}
-                                            onClick={e => e.stopPropagation()}
-                                            onChange={e => setProjectMeta(meta => ({
-                                                ...meta,
-                                                [project.project_name]: { ...meta[project.project_name], [field]: e.target.value }
-                                            }))}
-                                            placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace('Code', ' Code')}
-                                            className="p-1 border border-gray-300 rounded w-24 text-base"
-                                            />
+                                            // --- FIX: Conditional rendering for the Environment field ---
+                                            field === 'environment' ? (
+                                                <select
+                                                    value={projectMeta[project.project_name]?.[field] || ''}
+                                                    onClick={e => e.stopPropagation()}
+                                                    onChange={e => setProjectMeta(meta => ({
+                                                        ...meta,
+                                                        [project.project_name]: { ...meta[project.project_name], [field]: e.target.value }
+                                                    }))}
+                                                    className="p-1 border border-gray-300 rounded w-full text-base"
+                                                >
+                                                    <option value="">Select...</option>
+                                                    <option value="Production">Production</option>
+                                                    <option value="Non-Production">Non-Production</option>
+                                                </select>
+                                            ) : (
+                                                <input
+                                                    type="text"
+                                                    value={projectMeta[project.project_name]?.[field] || ''}
+                                                    onClick={e => e.stopPropagation()}
+                                                    onChange={e => setProjectMeta(meta => ({
+                                                        ...meta,
+                                                        [project.project_name]: { ...meta[project.project_name], [field]: e.target.value }
+                                                    }))}
+                                                    placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace('Code', ' Code')}
+                                                    className="p-1 border border-gray-300 rounded w-24 text-base"
+                                                />
+                                            )
                                         ) : (
                                             <span>{projectMeta[project.project_name]?.[field] || ''}</span>
                                         )}
@@ -384,7 +401,7 @@ const ProjectsView = () => {
                                         <span className="hidden print:inline text-base">{projectMeta[project.project_name]?.[field] || ''}</span>
                                     </td>
                                     ))}
-                                    <td className="px-6 py-4 whitespace-nowrap font-bold text-green-600 text-base">
+                                    <td className="px-6 py-4 whitespace-nowrap font-bold text-green-600 text-base text-right">
                                     {formatCurrency(project[`${selectedMonth}_cost`] || 0)}
                                     </td>
                                     {(userRole === 'admin' || userRole === 'superadmin') && (

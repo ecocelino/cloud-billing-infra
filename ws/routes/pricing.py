@@ -1,47 +1,77 @@
-from flask import Blueprint, request, jsonify
-# --- FIX: Changed the import to the correct service location ---
-from services.auth_service import token_required, role_required
 import json
-import os
+from flask import Blueprint, jsonify, request, current_app
+from models import db, ExchangeRate
+from services.auth_service import token_required, role_required
+import datetime
+import requests
 
 pricing_bp = Blueprint("pricing", __name__)
-
-# Helper function to get the absolute path to the pricing JSON file
-def get_json_path():
-    # Assumes gcp_pricing.json is in the parent directory of this file's directory (i.e., in /ws)
-    return os.path.join(os.path.dirname(__file__), '..', 'gcp_pricing.json')
 
 @pricing_bp.route("/api/pricing/gcp", methods=["GET"])
 @token_required
 def get_gcp_pricing(current_user):
-    """
-    Reads and returns the GCP pricing data from the JSON file.
-    """
     try:
-        json_path = get_json_path()
-        with open(json_path, 'r') as f:
+        # It's generally better to use an absolute path or a path relative
+        # to the instance folder for production, but this works for development.
+        with open('gcp_pricing.json', 'r') as f:
             data = json.load(f)
-        return jsonify(data), 200
-    except FileNotFoundError:
-        return jsonify({"error": "Pricing data file not found."}), 404
-    except Exception as e:
-        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+        
+        exchange_rate = ExchangeRate.query.filter_by(source_currency='USD', target_currency='PHP').order_by(ExchangeRate.last_updated.desc()).first()
+        
+        if exchange_rate:
+            data['exchange_rate_info'] = {
+                'rate': float(exchange_rate.rate),
+                'last_updated': exchange_rate.last_updated.strftime('%Y-%m-%d %H:%M:%S UTC')
+            }
+        else:
+            data['exchange_rate_info'] = None
 
-@pricing_bp.route("/api/pricing/gcp", methods=["POST"])
+        return jsonify(data)
+    except FileNotFoundError:
+        return jsonify({"error": "Pricing file not found on the server."}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@pricing_bp.route("/api/exchange-rate/update", methods=["POST"])
 @token_required
 @role_required(roles=["admin", "superadmin"])
-def update_gcp_pricing(current_user):
-    """
-    Receives new pricing data from the frontend and overwrites the JSON file.
-    """
-    new_data = request.get_json()
-    if not new_data:
-        return jsonify({"error": "No data provided in the request."}), 400
+def update_exchange_rate(current_user):
+    # Read the API key securely from the application's config
+    API_KEY = current_app.config.get('EXCHANGE_RATE_API_KEY')
     
+    if not API_KEY:
+        return jsonify({"error": "Exchange rate API key is not configured on the server."}), 500
+
+    url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/USD"
+
     try:
-        json_path = get_json_path()
-        with open(json_path, 'w') as f:
-            json.dump(new_data, f, indent=4)
-        return jsonify({"message": "Pricing data updated successfully."}), 200
+        response = requests.get(url)
+        # Raise an exception for bad status codes (4xx or 5xx)
+        response.raise_for_status()
+        data = response.json()
+
+        if data.get("result") == "success":
+            rate = data["conversion_rates"]["PHP"]
+            
+            # Find the existing rate record or create a new one
+            exchange_rate = ExchangeRate.query.filter_by(source_currency='USD', target_currency='PHP').first()
+            if not exchange_rate:
+                exchange_rate = ExchangeRate(source_currency='USD', target_currency='PHP')
+            
+            exchange_rate.rate = rate
+            exchange_rate.last_updated = datetime.datetime.utcnow()
+            
+            db.session.add(exchange_rate)
+            db.session.commit()
+            
+            return jsonify({"message": f"Exchange rate updated successfully. 1 USD = {rate:.4f} PHP."}), 200
+        else:
+            # Handle cases where the API key is invalid or the request fails
+            return jsonify({"error": "Failed to fetch rate from external API. Check your API key or the service status."}), 500
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Could not connect to the exchange rate service: {e}"}), 503
     except Exception as e:
-        return jsonify({"error": f"An error occurred while saving the file: {str(e)}"}), 500
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+

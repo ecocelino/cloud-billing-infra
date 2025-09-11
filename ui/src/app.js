@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
-import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut, Settings, Filter, Tag, ChevronDown, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut, Settings, Filter, Tag, ChevronDown, ChevronsLeft, ChevronsRight, FileText } from 'lucide-react';
 import { GlobalStateProvider, GlobalStateContext } from './context/GlobalStateContext';
 
 // Component Imports
@@ -10,8 +10,8 @@ import ProjectsView from './components/ProjectsView';
 import BillingView from './components/BillingView';
 import SettingsView from './components/SettingsView';
 import PricingView from './components/PricingView';
+import BudgetsView from './components/BudgetsView';
 
-// The Sidebar now gets its state from the context
 const Sidebar = () => {
     const { isSidebarCollapsed, setIsSidebarCollapsed, userRole, logout } = useContext(GlobalStateContext);
     const [isPricingMenuOpen, setIsPricingMenuOpen] = useState(false);
@@ -25,7 +25,7 @@ const Sidebar = () => {
     const activeLinkClasses = "bg-blue-500 text-white";
 
     return (
-        <nav className={`bg-white p-4 shadow-lg flex flex-col sticky top-0 h-screen transition-all duration-300 relative z-10 ${isSidebarCollapsed ? 'w-20 items-center' : 'w-64'}`}>
+        <nav className={`main-sidebar bg-white p-4 shadow-lg flex flex-col sticky top-0 h-screen transition-all duration-300 ${isSidebarCollapsed ? 'w-20 items-center' : 'w-64'}`}>
             <div className={`flex items-center space-x-2 mb-10 px-2 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
                 <Cloud size={40} className="text-blue-600 flex-shrink-0" />
                 {!isSidebarCollapsed && <h1 className="text-xl font-bold text-gray-900">Cloud Cost System</h1>}
@@ -37,6 +37,9 @@ const Sidebar = () => {
                 </NavLink>
                 <NavLink to="/projects" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
                     <FolderOpen size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Projects</span>}
+                </NavLink>
+                 <NavLink to="/budgets" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
+                    <FileText size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Budgets</span>}
                 </NavLink>
                 <NavLink to="/billing" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
                     <BarChart3 size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Billing</span>}
@@ -91,26 +94,59 @@ const GlobalFilters = () => {
     );
 };
 
-// This component contains the main application layout
 const AppContent = () => {
     return (
-        <div className="flex min-h-screen bg-slate-100 font-sans">
-            <Sidebar />
-            <div className="flex-1 p-4 sm:p-8 overflow-y-auto relative z-0">
-                <Routes>
-                    <Route path="/dashboard" element={<DashboardView />} />
-                    <Route path="/projects" element={<><GlobalFilters /><ProjectsView /></>} />
-                    <Route path="/billing" element={<><GlobalFilters /><BillingView /></>} />
-                    <Route path="/pricing/:tier" element={<PricingView />} />
-                    <Route path="/settings" element={<SettingsView />} />
-                    <Route path="/" element={<DashboardView />} />
-                </Routes>
+        <>
+            {/* --- FIX: Final, robust global style block for printing --- */}
+            <style>
+                {`
+                    @media print {
+                        body {
+                            -webkit-print-color-adjust: exact;
+                        }
+                        /* Hide elements not meant for printing */
+                        .no-print, .main-sidebar {
+                            display: none !important;
+                        }
+                        /* This is the key: Reset the main content area for printing */
+                        .main-content-area {
+                            overflow: visible !important;
+                            height: auto !important;
+                            padding: 0 !important;
+                            margin: 0 !important;
+                            width: 100% !important; /* Ensure content uses full width */
+                        }
+                         /* This class no longer needs padding as the @page rule handles it */
+                        .printable-content {
+                           box-shadow: none !important;
+                           border: none !important;
+                        }
+                        /* Set the page size and margins directly in the @page rule */
+                        @page {
+                            size: A4 portrait;
+                            margin: 0.75in; /* This creates a symmetrical margin */
+                        }
+                    }
+                `}
+            </style>
+            <div className="flex min-h-screen bg-slate-100 font-sans">
+                <Sidebar />
+                <div className="main-content-area flex-1 p-4 sm:p-8 overflow-y-auto relative z-0">
+                    <Routes>
+                        <Route path="/dashboard" element={<DashboardView />} />
+                        <Route path="/projects" element={<><GlobalFilters /><ProjectsView /></>} />
+                        <Route path="/billing" element={<><GlobalFilters /><BillingView /></>} />
+                        <Route path="/budgets" element={<BudgetsView />} />
+                        <Route path="/pricing/:tier" element={<PricingView />} />
+                        <Route path="/settings" element={<SettingsView />} />
+                        <Route path="/" element={<DashboardView />} />
+                    </Routes>
+                </div>
             </div>
-        </div>
+        </>
     );
 };
 
-// This component acts as the main router, deciding to show Login or the App
 const AppRouter = () => {
     const { isLoggedIn, isAuthLoading, login, authError } = useContext(GlobalStateContext);
 

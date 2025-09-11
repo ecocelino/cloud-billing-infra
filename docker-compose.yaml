@@ -4,11 +4,8 @@ services:
     container_name: mysql_db
     ports:
       - "3306:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${DB_DATABASE}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
+    env_file:
+      - ./.env
     volumes:
       - mysql_data:/var/lib/mysql
     restart: always
@@ -28,14 +25,8 @@ services:
       - "5000:5000"
     volumes:
       - ./ws:/app
-    environment:
-      FLASK_ENV: development
-      # --- THIS LINE IS CHANGED ---
-      FLASK_DEBUG: 0
-      DB_HOST: mysql
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_DATABASE: ${DB_DATABASE}
+    env_file:
+      - ./.env
     depends_on:
       mysql:
         condition: service_healthy
@@ -53,10 +44,8 @@ services:
     volumes:
       - ./ui:/app
       - /app/node_modules
-    environment:
-      - REACT_APP_API_URL=${REACT_APP_API_URL}
-      - WDS_SOCKET_HOST=${WDS_SOCKET_HOST}
-      - CHOKIDAR_USEPOLLING=${CHOKIDAR_USEPOLLING}
+    env_file:
+      - ./.env
     depends_on:
       - backend
     restart: always

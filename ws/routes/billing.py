@@ -1,9 +1,6 @@
-# routes/billing.py
-
 from flask import Blueprint, request, jsonify
 from models import db, Billing, Project
 from services.auth_service import token_required, role_required
-# --- ADDED: Import the new processing function ---
 from services.billing_service import process_billing_data
 import csv
 import io
@@ -18,6 +15,7 @@ def get_billing_services(current_user):
     platform = request.args.get("platform")
     year = request.args.get("year")
 
+    # --- FIX: The query is now simpler and fetches all data first ---
     query = db.session.query(Billing, Project.project_name.label("project_name")).join(
         Project, Billing.project_id == Project.id
     )
@@ -29,6 +27,7 @@ def get_billing_services(current_user):
 
     services = query.all()
 
+    # Convert all raw data to a dictionary format
     result = [
         {
             "id": s.Billing.id,
@@ -45,17 +44,28 @@ def get_billing_services(current_user):
         for s in services
     ]
 
-    # --- MODIFIED: Process the data before sending it ---
+    # --- FIX: Step 1 - Apply business rules to the ENTIRE dataset ---
     processed_result = process_billing_data(result)
-    return jsonify(processed_result), 200
-    # --- END MODIFICATION ---
+
+    # --- FIX: Step 2 - Apply permissions filter AFTER the rules have run ---
+    if current_user.role == 'user':
+        assigned_project_names = {p.project_name for p in current_user.assigned_projects}
+        if not assigned_project_names:
+            return jsonify([]), 200 # Return empty list if user has no projects
+        
+        # Filter the in-memory list of processed data
+        final_result = [item for item in processed_result if item['project_name'] in assigned_project_names]
+    else:
+        # Admins and SuperAdmins see everything
+        final_result = processed_result
+
+    return jsonify(final_result), 200
 
 
 @billing_bp.route("/api/billing/upload_csv", methods=["POST"])
 @token_required
 @role_required(roles=["admin", "superadmin"])
 def upload_csv(current_user):
-    # (No changes needed in this function)
     file = request.files.get("file")
     platform = request.form.get("platform")
     selected_month = request.form.get("month")
@@ -69,6 +79,13 @@ def upload_csv(current_user):
         return jsonify({"error": "Month and Year for the upload are required"}), 400
 
     try:
+        Billing.query.filter_by(
+            billing_year=int(selected_year),
+            billing_month=selected_month,
+            platform=platform
+        ).delete()
+        db.session.commit()
+
         stream = io.StringIO(file.stream.read().decode("utf-8"))
         reader = csv.DictReader(stream)
         
@@ -127,3 +144,4 @@ def upload_csv(current_user):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+

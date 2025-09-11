@@ -1,11 +1,3 @@
-# /app/ws.py
-
-# --- ADDED: Explicitly add project root to the Python path ---
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-# --- END ---
-
 from flask import Flask
 from flask_cors import CORS
 from models import db
@@ -16,6 +8,8 @@ from routes.users import users_bp
 from routes.billing import billing_bp
 from routes.projects import projects_bp
 from routes.pricing import pricing_bp
+# --- ADDED: Import the new budgets blueprint ---
+from routes.budgets import budgets_bp
 
 app = Flask(__name__)
 
@@ -33,6 +27,8 @@ app.register_blueprint(users_bp)
 app.register_blueprint(billing_bp)
 app.register_blueprint(projects_bp)
 app.register_blueprint(pricing_bp)
+# --- ADDED: Register the new budgets blueprint ---
+app.register_blueprint(budgets_bp)
 
 if __name__ == "__main__":
     with app.app_context():

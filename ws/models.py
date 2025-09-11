@@ -1,14 +1,25 @@
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+import datetime
 
 db = SQLAlchemy()
 
+# Association Table for User-Project many-to-many relationship
+user_project_assignments = db.Table('user_project_assignments',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('project_id', db.Integer, db.ForeignKey('projects.id'), primary_key=True)
+)
+
 class User(db.Model):
-    __tablename__ = "users"
+    __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
-    role = db.Column(db.String(80), nullable=False, default='user')
+    role = db.Column(db.String(20), nullable=False, default='user')
+    
+    # Relationship to assigned projects
+    assigned_projects = db.relationship('Project', secondary=user_project_assignments, lazy='subquery',
+        backref=db.backref('assigned_users', lazy=True))
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -17,28 +28,46 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
 
 class Project(db.Model):
-    __tablename__ = "projects"
+    __tablename__ = 'projects'
     id = db.Column(db.Integer, primary_key=True)
-    # Correctly map attributes to the database column names
-    project_name = db.Column(db.String(255), unique=True, nullable=False)
-    project_code = db.Column(db.String(50), unique=True)
-    environment = db.Column(db.String(255))
-    owner = db.Column(db.String(255))
-    team = db.Column(db.String(255))
+    project_name = db.Column(db.String(100), unique=True, nullable=False)
+    project_code = db.Column(db.String(50), nullable=True)
+    environment = db.Column(db.String(50), nullable=True)
+    owner = db.Column(db.String(100), nullable=True)
+    team = db.Column(db.String(100), nullable=True)
+    
+    # Relationship to billing data
+    billing_entries = db.relationship('Billing', backref='project', lazy=True)
+    # Relationship to budgets
+    budgets = db.relationship('Budget', backref='project', lazy=True, cascade="all, delete-orphan")
+
 
 class Billing(db.Model):
-    __tablename__ = "monthly_service_costs"
-
+    __tablename__ = 'billing_data'
     id = db.Column(db.Integer, primary_key=True)
-    project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
     billing_year = db.Column(db.Integer, nullable=False)
     billing_month = db.Column(db.String(10), nullable=False)
-    platform = db.Column(db.String(10), nullable=False)
+    platform = db.Column(db.String(50), nullable=False)
     service_description = db.Column(db.String(255))
     sku_description = db.Column(db.String(255))
-    type = db.Column(db.String(255))
-    cost = db.Column(db.Numeric(10, 2), default=0.00)
+    type = db.Column(db.String(50))
+    cost = db.Column(db.Numeric(10, 2))
 
-    project = db.relationship("Project", backref="billings")
+class Budget(db.Model):
+    __tablename__ = 'budgets'
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    year = db.Column(db.Integer, nullable=False)
+    month = db.Column(db.String(10), nullable=False)
+    amount = db.Column(db.Numeric(12, 2), nullable=False)
 
+# --- ADDED: ExchangeRate Model ---
+class ExchangeRate(db.Model):
+    __tablename__ = 'exchange_rates'
+    id = db.Column(db.Integer, primary_key=True)
+    source_currency = db.Column(db.String(3), nullable=False, default='USD')
+    target_currency = db.Column(db.String(3), nullable=False, default='PHP')
+    rate = db.Column(db.Numeric(10, 4), nullable=False)
+    last_updated = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow)
 
