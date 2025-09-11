@@ -10,6 +10,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tool
 const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const years = [2023, 2024, 2025, 2026, 2027];
 const colorPalette = ['#3b82f6', '#10b981', '#ef4444', '#f97316', '#8b5cf6', '#64748b', '#f59e0b'];
+const previousYearColor = '#9ca3af'; // Gray for the previous year's bars
 
 const ServiceBreakdownView = ({ services, selectedMonth }) => {
     const [expandedServices, setExpandedServices] = useState({});
@@ -68,7 +69,8 @@ const ServiceBreakdownView = ({ services, selectedMonth }) => {
 
 
 const DashboardView = () => {
-    const { yearlyBillingData: inventory, selectedYear, setSelectedYear } = useContext(GlobalStateContext);
+    // --- FIX: Get both current and previous year's data from context ---
+    const { yearlyBillingData: inventory, previousYearBillingData, selectedYear, setSelectedYear } = useContext(GlobalStateContext);
 
     const [selectedProjects, setSelectedProjects] = useState([]);
     const [selectedMonth, setSelectedMonth] = useState('all');
@@ -90,11 +92,17 @@ const DashboardView = () => {
             name.toLowerCase().includes(projectSearchTerm.toLowerCase())
         );
     }, [projectNames, projectSearchTerm]);
-
+    
+    // --- FIX: Filter both current and previous year's data based on selected projects ---
     const filteredInventory = useMemo(() => {
         if (selectedProjects.length === 0) return inventory;
         return inventory.filter(item => selectedProjects.includes(item.project_name));
     }, [inventory, selectedProjects]);
+
+    const filteredPreviousYearInventory = useMemo(() => {
+        if (selectedProjects.length === 0) return previousYearBillingData;
+        return previousYearBillingData.filter(item => selectedProjects.includes(item.project_name));
+    }, [previousYearBillingData, selectedProjects]);
     
     const projectTitleDisplay = useMemo(() => {
         if (selectedProjects.length === 0) return 'All Projects';
@@ -173,15 +181,34 @@ const DashboardView = () => {
             .sort((a, b) => b.totalCost - a.totalCost);
     }, [filteredInventory, selectedMonth]);
     
+    // --- FIX: Updated mainBarData to include both years ---
     const mainBarData = useMemo(() => {
-        const monthlyCosts = {};
-        months.forEach(m => { monthlyCosts[m] = 0; });
-        filteredInventory.forEach(item => { months.forEach(m => { monthlyCosts[m] += parseFloat(item[`${m}_cost`] || 0); }); });
+        const calculateMonthlyCosts = (data) => {
+            const monthlyCosts = {};
+            months.forEach(m => { monthlyCosts[m] = 0; });
+            data.forEach(item => { months.forEach(m => { monthlyCosts[m] += parseFloat(item[`${m}_cost`] || 0); }); });
+            return months.map(m => monthlyCosts[m]);
+        };
+        
+        const currentYearCosts = calculateMonthlyCosts(filteredInventory);
+        const previousYearCosts = calculateMonthlyCosts(filteredPreviousYearInventory);
+
         return {
             labels: months.map(m => m.charAt(0).toUpperCase() + m.slice(1)),
-            datasets: [{ label: 'Total Monthly Cost', data: months.map(m => monthlyCosts[m]), backgroundColor: colorPalette[0] }],
+            datasets: [
+                { 
+                    label: `${selectedYear - 1}`, 
+                    data: previousYearCosts, 
+                    backgroundColor: previousYearColor 
+                },
+                { 
+                    label: `${selectedYear}`, 
+                    data: currentYearCosts, 
+                    backgroundColor: colorPalette[0] 
+                }
+            ],
         };
-    }, [filteredInventory]);
+    }, [filteredInventory, filteredPreviousYearInventory, selectedYear]);
 
     const rightChartData = useMemo(() => {
         const dataSet = selectedProjects.length === 1 ? serviceBreakdown : Object.entries(projectCosts).map(([name, cost])=>({name, totalCost:cost}));
@@ -246,39 +273,21 @@ const DashboardView = () => {
     const mainBarOptions = {
         ...chartOptionsBase,
         plugins: { 
-            legend: { display: false },
+            legend: { position: 'top' }, // Show the legend for the years
             tooltip: {
                 callbacks: {
                     label: function(context) {
                         const label = context.dataset.label || '';
                         const value = context.parsed.y;
-                        const formattedValue = formatCurrency(value);
-                        
-                        const currentMonthIndex = context.dataIndex;
-                        if (currentMonthIndex === 0) {
-                            return `${label}: ${formattedValue}`;
-                        }
-                        
-                        const prevMonth = months[currentMonthIndex - 1];
-                        const currentMonth = months[currentMonthIndex];
-                        
-                        const currentMonthCost = filteredInventory.reduce((sum, item) => sum + (parseFloat(item[`${currentMonth}_cost`]) || 0), 0);
-                        const prevMonthCost = filteredInventory.reduce((sum, item) => sum + (parseFloat(item[`${prevMonth}_cost`]) || 0), 0);
-
-                        let percentageChange = 0;
-                        if (prevMonthCost !== 0) {
-                            percentageChange = Math.round(((currentMonthCost - prevMonthCost) / prevMonthCost) * 100);
-                        } else if (currentMonthCost > 0) {
-                            percentageChange = 100;
-                        }
-
-                        const trend = percentageChange >= 0 ? `(▲ ${percentageChange}%)` : `(▼ ${Math.abs(percentageChange)}%)`;
-                        return `${label}: ${formattedValue} ${trend}`;
+                        return `${label}: ${formatCurrency(value)}`;
                     }
                 }
             }
         },
-        scales: { y: { beginAtZero: true, ticks: { callback: value => formatCurrency(value) } } }
+        scales: { 
+            x: { stacked: false },
+            y: { stacked: false, beginAtZero: true, ticks: { callback: value => formatCurrency(value) } } 
+        }
     };
 
     const rightChartOptions = {
@@ -296,7 +305,7 @@ const DashboardView = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-xl shadow-lg text-center flex flex-col justify-center">
                     <DollarSign size={40} className="text-green-600 mb-2 mx-auto" />
-                    <h3 className="text-xl font-semibold text-gray-800">Total Spend ({selectedMonth === 'all' ? 'All Months' : selectedMonth.charAt(0).toUpperCase() + selectedMonth.slice(1)})</h3>
+                    <h3 className="text-xl font-semibold text-gray-800">Total Spend ({selectedMonth === 'all' ? selectedYear : selectedMonth.charAt(0).toUpperCase() + selectedMonth.slice(1)})</h3>
                     <p className="text-3xl font-bold text-gray-900 mt-1">{formatCurrency(totalCostForPeriod)}</p>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-lg text-center flex flex-col justify-center">
@@ -358,7 +367,7 @@ const DashboardView = () => {
                 <div className="lg:col-span-3 bg-white p-6 rounded-xl shadow-lg">
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-lg font-semibold text-gray-800 truncate" title={`Monthly Cost Breakdown for ${projectTitleDisplay} (${selectedYear})`}>
-                            Monthly Cost Breakdown for <span className="text-blue-600">{projectTitleDisplay}</span> ({selectedYear})
+                            Monthly Cost Breakdown for <span className="text-blue-600">{projectTitleDisplay}</span>
                         </h3>
                         {selectedMonth !== 'all' && (
                             <button onClick={() => setSelectedMonth('all')} className="flex items-center gap-2 text-sm text-blue-600 hover:underline font-semibold">
@@ -369,7 +378,7 @@ const DashboardView = () => {
                     <div className="h-96 relative">
                         <Bar
                             ref={mainBarChartRef}
-                            key={`main-bar-${selectedProjects.join('_')}`}
+                            key={`main-bar-${selectedProjects.join('_')}-${selectedYear}`}
                             data={mainBarData}
                             options={mainBarOptions}
                             onClick={handleBarClick}

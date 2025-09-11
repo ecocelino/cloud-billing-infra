@@ -4,7 +4,6 @@ RENAME_MONTH_INDEX = 4  # Corresponds to May
 TRANSFER_MONTH_INDEX = 5 # Corresponds to June
 TRANSFER_YEAR = 2025
 
-# --- NEW: Define target projects for cost distribution ---
 DISTRIBUTION_TARGET_PROJECT_CODES = ['BPS', 'CASHBOX', 'MRDELIVERY', 'MULTIPAY', 'OVR', 'TXTBOX']
 
 def process_billing_data(data):
@@ -41,53 +40,41 @@ def process_billing_data(data):
 
         initial_transformed_data.append(processed_item)
 
-    # --- Step 2: New Cost Distribution Logic (Rule 3) ---
+    # --- Step 2: New, More Accurate Cost Distribution Logic (Rule 3) ---
     
-    # Find the project IDs for the target codes
-    # Note: This is a simplified approach. A more robust solution would fetch this from the database.
-    # We assume the project name format is consistent (e.g., 'bps-prod-1')
-    target_project_names = [f"{code.lower()}-prod-1" for code in DISTRIBUTION_TARGET_PROJECT_CODES] # Example, adjust if needed
-
-    # Calculate total costs for the source project per month
-    source_project_costs_by_month = {}
+    # This logic assumes a consistent naming convention for target projects.
+    # e.g., a project code 'BPS' maps to a project name like 'ms-bps-prod-1'.
+    # Adjust this line if your naming convention is different.
+    target_project_names = [f"ms-{code.lower()}-prod-1" for code in DISTRIBUTION_TARGET_PROJECT_CODES]
+    
+    # Separate the source project's items from the rest of the data
+    source_items = []
+    other_items = []
     for item in initial_transformed_data:
         if item['project_name'] == 'multisys-hostnet-prod-1':
-            month = item['billing_month']
-            if month not in source_project_costs_by_month:
-                source_project_costs_by_month[month] = 0.0
-            source_project_costs_by_month[month] += item['cost']
+            source_items.append(item)
+        else:
+            other_items.append(item)
 
-    # Create the new distributed cost records
-    distributed_cost_items = []
-    num_targets = len(DISTRIBUTION_TARGET_PROJECT_CODES)
+    # Create the new, distributed line items
+    distributed_items = []
+    num_targets = len(target_project_names)
     if num_targets > 0:
-        for month, total_cost in source_project_costs_by_month.items():
-            cost_per_target = total_cost / num_targets
-            for project_name in target_project_names:
-                # Find a sample item to get year, platform etc.
-                sample_item = next((item for item in initial_transformed_data if item['billing_month'] == month), None)
-                if sample_item:
-                    distributed_cost_items.append({
-                        'project_name': project_name,
-                        'billing_year': sample_item.get('billing_year'),
-                        'billing_month': month,
-                        'platform': sample_item.get('platform'),
-                        'service_description': 'Shared Infrastructure Costs',
-                        'sku_description': 'Distributed from multisys-hostnet-prod-1',
-                        'type': 'cost',
-                        'cost': cost_per_target,
-                        # Set other fields to null or default
-                        'id': f"dist-{project_name}-{month}",
-                        'project_id': None 
-                    })
+        # Iterate through each individual line item from the source project
+        for source_item in source_items:
+            cost_per_target = source_item['cost'] / num_targets
+            
+            # Create a new, distributed line item for each target project
+            for target_name in target_project_names:
+                new_item = source_item.copy() # Copy all details (SKU, service, etc.)
+                new_item['project_name'] = target_name
+                new_item['cost'] = cost_per_target
+                new_item['id'] = f"dist-{source_item['id']}-{target_name}" # Create a new unique ID
+                new_item['project_id'] = None # Project ID will be resolved by frontend aggregation
+                distributed_items.append(new_item)
 
-    # --- Step 3: Combine and Finalize ---
-    
-    # Filter out the original source project
-    final_data = [item for item in initial_transformed_data if item['project_name'] != 'multisys-hostnet-prod-1']
-    
-    # Add the new distributed cost items
-    final_data.extend(distributed_cost_items)
+    # The final dataset is the other items plus the new, distributed items
+    final_data = other_items + distributed_items
 
     return final_data
 

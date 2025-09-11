@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useContext, useEffect } from 'react';
 import { GlobalStateContext } from '../context/GlobalStateContext';
-import { FileUp, Info, FileDown, Loader2, ArrowUpDown } from 'lucide-react';
+import { FileUp, Info, FileDown, Loader2, ArrowUpDown, CheckCircle, XCircle } from 'lucide-react';
 import { formatCurrency } from '../utils.js';
+import Papa from 'papaparse';
 
-// --- REMOVED: API_BASE_URL is no longer needed here as it's handled by the context/environment ---
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const years = [2023, 2024, 2025, 2026, 2027];
 
@@ -33,6 +34,10 @@ const BillingView = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: 'total_cost', direction: 'descending' });
 
+  const [isFileValidated, setIsFileValidated] = useState(false);
+  const [validationError, setValidationError] = useState('');
+  const [isParsing, setIsParsing] = useState(false);
+
   useEffect(() => {
     if (uploadStatus.message && uploadStatus.type !== 'loading') {
         const timer = setTimeout(() => {
@@ -42,14 +47,69 @@ const BillingView = () => {
         return () => clearTimeout(timer);
     }
   }, [uploadStatus]);
+  
+  const handleFileSelect = (event) => {
+      const file = event.target.files[0];
+      setUploadFile(file);
+      setIsFileValidated(false);
+      setValidationError('');
+
+      if (!file) return;
+      if (!selectedMonthUpload || !selectedYearUpload) {
+          setValidationError('Please select a month and year before choosing a file.');
+          return;
+      }
+      
+      setIsParsing(true);
+      Papa.parse(file, {
+          preview: 10, // Check a few more rows to be safe
+          header: true,
+          skipEmptyLines: true,
+          complete: (results) => {
+              const dateColumn = 'Usage start date';
+              if (!results.meta.fields.includes(dateColumn)) {
+                  setValidationError(`CSV must contain a "${dateColumn}" column.`);
+                  setIsParsing(false);
+                  return;
+              }
+
+              // --- FIX: Implement more flexible date validation ---
+              const selectedMonthIndex = months.indexOf(selectedMonthUpload);
+              
+              // Calculate the previous month and year
+              let prevMonthIndex = selectedMonthIndex === 0 ? 11 : selectedMonthIndex - 1;
+              let prevYear = selectedMonthIndex === 0 ? selectedYearUpload - 1 : selectedYearUpload;
+
+              for (const row of results.data) {
+                  const usageDate = new Date(row[dateColumn]);
+                  if (isNaN(usageDate.getTime())) continue;
+
+                  const fileMonthIndex = usageDate.getMonth();
+                  const fileYear = usageDate.getFullYear();
+                  
+                  // Check if the date is for the selected month OR the previous month
+                  const isCurrentMonth = fileYear === selectedYearUpload && fileMonthIndex === selectedMonthIndex;
+                  const isPreviousMonth = fileYear === prevYear && fileMonthIndex === prevMonthIndex;
+
+                  if (!isCurrentMonth && !isPreviousMonth) {
+                      const expectedMonth = selectedMonthUpload.charAt(0).toUpperCase() + selectedMonthUpload.slice(1);
+                      const foundMonth = months[fileMonthIndex].charAt(0).toUpperCase() + months[fileMonthIndex].slice(1);
+                      setValidationError(`File contains data for ${foundMonth} ${fileYear}. Please upload a file for ${expectedMonth} ${selectedYearUpload}.`);
+                      setIsParsing(false);
+                      return; // Stop on first invalid date
+                  }
+              }
+              // --- END FIX ---
+
+              setIsFileValidated(true);
+              setIsParsing(false);
+          }
+      });
+  };
 
   const handleBillingUpload = async () => {
-    if (!uploadFile) {
-      setUploadStatus({ message: 'Please select a file first.', type: 'error' });
-      return;
-    }
-    if (!selectedMonthUpload) {
-      setUploadStatus({ message: 'Please select a month for the upload.', type: 'error' });
+    if (!uploadFile || !isFileValidated) {
+      setUploadStatus({ message: 'Please select and validate a file first.', type: 'error' });
       return;
     }
     
@@ -64,8 +124,7 @@ const BillingView = () => {
     formData.append('platform', platformFilter);
 
     try {
-      // Note: The fetch URL now correctly uses the environment variable
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/billing/upload_csv`, { 
+      const response = await fetch(`${API_BASE_URL}/billing/upload_csv`, { 
         method: 'POST', 
         headers: { 'x-access-token': token },
         body: formData 
@@ -79,6 +138,7 @@ const BillingView = () => {
       }
       
       setUploadFile(null);
+      setIsFileValidated(false);
       document.getElementById('billing-file-input').value = "";
       
       if (onUploadSuccess) {
@@ -125,7 +185,18 @@ const BillingView = () => {
         });
     }
 
-    return { data: dataWithTotals, minCost, maxCost };
+    const grandTotal = {
+        project_name: 'Grand Total',
+        total_cost: 0
+    };
+    months.forEach(month => {
+        const monthKey = `${month}_cost`;
+        const monthlyTotal = dataWithTotals.reduce((sum, project) => sum + (project[monthKey] || 0), 0);
+        grandTotal[monthKey] = monthlyTotal;
+        grandTotal.total_cost += monthlyTotal;
+    });
+
+    return { data: dataWithTotals, minCost, maxCost, grandTotal };
   }, [billingData, selectedYear, sortConfig]);
 
   const requestSort = (key) => {
@@ -138,6 +209,7 @@ const BillingView = () => {
 
   const handleExportCSV = () => {
     const headers = ['Project Name', ...months.map(m => m.toUpperCase()), 'Total'];
+    
     const rows = processedBillingData.data.map(project => {
         const rowData = [
             `"${project.project_name.replace(/"/g, '""')}"`,
@@ -146,6 +218,17 @@ const BillingView = () => {
         rowData.push(project.total_cost);
         return rowData.join(',');
     });
+
+    rows.push('');
+
+    const grandTotal = processedBillingData.grandTotal;
+    const grandTotalRowData = [
+        `"${grandTotal.project_name}"`,
+        ...months.map(month => grandTotal[`${month}_cost`] || 0)
+    ];
+    grandTotalRowData.push(grandTotal.total_cost);
+    rows.push(grandTotalRowData.join(','));
+
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -170,27 +253,22 @@ const BillingView = () => {
       {(userRole === 'admin' || userRole === 'superadmin') && (
         <div className="bg-white p-6 rounded-xl shadow-lg">
           <h3 className="text-2xl font-semibold text-gray-800 mb-4">Upload Monthly Billing Report</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
-            <input id="billing-file-input" type="file" accept=".csv" onChange={(e) => setUploadFile(e.target.files[0])} className="md:col-span-1 block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
-            <select value={selectedMonthUpload} onChange={(e) => setSelectedMonthUpload(e.target.value)} className="p-3 border border-gray-300 rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div className="md:col-span-1">
+                <input id="billing-file-input" type="file" accept=".csv" onChange={handleFileSelect} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                {isParsing && <div className="text-sm text-blue-600 mt-2 flex items-center gap-2"><Loader2 className="animate-spin" size={16} /><span>Verifying file...</span></div>}
+                {validationError && <div className="text-sm text-red-600 mt-2 flex items-center gap-2"><XCircle size={16} /><span>{validationError}</span></div>}
+                {isFileValidated && <div className="text-sm text-green-600 mt-2 flex items-center gap-2"><CheckCircle size={16} /><span>File verified.</span></div>}
+            </div>
+            <select value={selectedMonthUpload} onChange={(e) => { setSelectedMonthUpload(e.target.value); setUploadFile(null); setIsFileValidated(false); setValidationError(''); document.getElementById('billing-file-input').value = ""; }} className="p-3 border border-gray-300 rounded-lg">
               <option value="">Choose Month...</option>
               {months.map(m => <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
             </select>
-            <select value={selectedYearUpload} onChange={(e) => setSelectedYearUpload(parseInt(e.target.value))} className="p-3 border border-gray-300 rounded-lg">
+            <select value={selectedYearUpload} onChange={(e) => { setSelectedYearUpload(parseInt(e.target.value)); setUploadFile(null); setIsFileValidated(false); setValidationError(''); document.getElementById('billing-file-input').value = ""; }} className="p-3 border border-gray-300 rounded-lg">
               {years.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
-            <button onClick={handleBillingUpload} disabled={platformFilter === 'all' || !platformFilter || isUploading} className="flex items-center justify-center space-x-2 bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
-              {isUploading ? (
-                <>
-                  <Loader2 size={20} className="animate-spin"/>
-                  <span>Uploading...</span>
-                </>
-              ) : (
-                <>
-                  <FileUp size={20}/>
-                  <span>Upload for {platformFilter}</span>
-                </>
-              )}
+            <button onClick={handleBillingUpload} disabled={!isFileValidated || isUploading} className="flex items-center justify-center space-x-2 bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+              {isUploading ? ( <> <Loader2 size={20} className="animate-spin"/> <span>Uploading...</span> </> ) : ( <> <FileUp size={20}/> <span>Upload for {platformFilter}</span> </> )}
             </button>
           </div>
           {uploadStatus.message && <p className={`mt-4 text-center text-sm font-medium ${getStatusColor(uploadStatus.type)}`}>{uploadStatus.message}</p>}
@@ -210,7 +288,7 @@ const BillingView = () => {
         </div>
       )}
 
-      <div className="bg-white p-6 rounded-xl shadow-lg">
+      <div className="bg-white p-6 rounded-xl shadow-lg printable-content">
         <div className="flex justify-between items-center mb-4">
             <h3 className="text-2xl font-semibold text-gray-800">Monthly Billing Overview</h3>
             <div className="flex items-center gap-4">
@@ -259,6 +337,17 @@ const BillingView = () => {
                   </tr>
                 ))}
               </tbody>
+              <tfoot className="bg-gray-100 font-bold">
+                <tr>
+                    <td className="px-6 py-4 whitespace-nowrap text-right sticky left-0 bg-gray-100">{processedBillingData.grandTotal.project_name}</td>
+                    {months.map(month => (
+                        <td key={month} className="px-6 py-4 whitespace-nowrap">
+                            {formatCurrency(processedBillingData.grandTotal[`${month}_cost`] || 0)}
+                        </td>
+                    ))}
+                    <td className="px-6 py-4 whitespace-nowrap sticky right-0 bg-gray-100">{formatCurrency(processedBillingData.grandTotal.total_cost)}</td>
+                </tr>
+              </tfoot>
             </table>
           )}
         </div>

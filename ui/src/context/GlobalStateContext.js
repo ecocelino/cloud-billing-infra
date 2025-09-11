@@ -5,70 +5,69 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api
 export const GlobalStateContext = createContext();
 
 const useYearlyBillingData = (platform, year, token, dataVersion) => {
-  const [processedData, setProcessedData] = useState([]);
+  // --- FIX: This state now holds data for both years ---
+  const [processedData, setProcessedData] = useState({ current: [], previous: [] });
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchDataAndProcess = async () => {
-      // Don't fetch if there's no token
       if (!platform || !year || !token) {
-        setProcessedData([]);
+        setProcessedData({ current: [], previous: [] });
         setIsLoading(false);
         return;
       }
       setIsLoading(true);
       try {
-        const [billingResponse, metaResponse] = await Promise.all([
-            fetch(`${API_BASE_URL}/billing/services?platform=${platform}&year=${year}`, { headers: { 'x-access-token': token } }),
-            fetch(`${API_BASE_URL}/projects/meta/all`, { headers: { 'x-access-token': token } })
-        ]);
-
-        if (!billingResponse.ok || !metaResponse.ok) {
+        // The API now fetches both current and previous year data in one call
+        const response = await fetch(`${API_BASE_URL}/billing/services?platform=${platform}&year=${year}`, { headers: { 'x-access-token': token } });
+        
+        if (!response.ok) {
             throw new Error('Failed to fetch initial data.');
         }
 
-        const rawData = await billingResponse.json();
-        const metaData = await metaResponse.json();
+        const rawData = await response.json();
         
         if (!Array.isArray(rawData)) {
-            setProcessedData([]);
+            setProcessedData({ current: [], previous: [] });
             return;
         }
 
         const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-        
-        const projects = {};
-        rawData.forEach(item => {
-            const projectName = item.project_name;
-            if (!projects[projectName]) {
-                projects[projectName] = { 
-                    project_name: projectName,
-                    platform: item.platform,
-                    billing_year: item.billing_year,
-                    service_breakdown: [] 
-                };
-                months.forEach(m => { projects[projectName][`${m}_cost`] = 0; });
-            }
-            projects[projectName].service_breakdown.push(item);
-            const itemMonth = item.billing_month;
-            if (itemMonth && months.includes(itemMonth)) {
-                 projects[projectName][`${itemMonth}_cost`] += parseFloat(item.cost || 0);
-            }
-        });
-        
-        const finalData = Object.values(projects);
 
-        finalData.forEach(project => {
-            if (metaData[project.project_name]) {
-                project.project_code = metaData[project.project_name].projectCode;
-            } else {
-                project.project_code = '';
-            }
-        });
-        setProcessedData(finalData);
+        // Helper function to aggregate data for a specific year
+        const aggregateDataForYear = (targetYear, data) => {
+            const projects = {};
+            const yearData = data.filter(d => d.billing_year === targetYear);
+
+            yearData.forEach(item => {
+                const projectName = item.project_name;
+                if (!projects[projectName]) {
+                    projects[projectName] = { 
+                        project_name: projectName,
+                        platform: item.platform,
+                        billing_year: item.billing_year,
+                        service_breakdown: [] 
+                    };
+                    months.forEach(m => { projects[projectName][`${m}_cost`] = 0; });
+                }
+                projects[projectName].service_breakdown.push(item);
+                const itemMonth = item.billing_month;
+                if (itemMonth && months.includes(itemMonth)) {
+                    projects[projectName][`${itemMonth}_cost`] += parseFloat(item.cost || 0);
+                }
+            });
+            return Object.values(projects);
+        };
+        
+        // Process data for both the current and previous year
+        const currentYearData = aggregateDataForYear(year, rawData);
+        const previousYearData = aggregateDataForYear(year - 1, rawData);
+
+        setProcessedData({ current: currentYearData, previous: previousYearData });
+
       } catch (error) {
         console.error("Failed to process billing data:", error);
-        setProcessedData([]);
+        setProcessedData({ current: [], previous: [] });
       } finally {
         setIsLoading(false);
       }
@@ -76,19 +75,22 @@ const useYearlyBillingData = (platform, year, token, dataVersion) => {
     fetchDataAndProcess();
   }, [platform, year, token, dataVersion]);
 
-  return { yearlyBillingData: processedData, isBillingLoading: isLoading };
+  // Return the structured data
+  return { 
+      yearlyBillingData: processedData.current, 
+      previousYearBillingData: processedData.previous,
+      isBillingLoading: isLoading 
+  };
 };
 
 
 export const GlobalStateProvider = ({ children }) => {
-  // --- AUTHENTICATION STATE NOW LIVES HERE ---
   const [token, setToken] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authError, setAuthError] = useState('');
-  const [isAuthLoading, setIsAuthLoading] = useState(true); // Prevents rendering until auth is checked
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
-  // --- App State ---
   const [platformFilter, setPlatformFilter] = useState('GCP');
   const [envFilter, setEnvFilter] = useState('all');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -97,9 +99,9 @@ export const GlobalStateProvider = ({ children }) => {
   
   const triggerRefetch = () => setDataVersion(v => v + 1);
 
-  const { yearlyBillingData, isBillingLoading } = useYearlyBillingData(platformFilter, selectedYear, token, dataVersion);
+  // --- FIX: The hook now provides both years' data ---
+  const { yearlyBillingData, previousYearBillingData, isBillingLoading } = useYearlyBillingData(platformFilter, selectedYear, token, dataVersion);
   
-  // Check for saved token on initial app load
   useEffect(() => {
     const savedToken = localStorage.getItem("authToken");
     const savedRole = localStorage.getItem("userRole");
@@ -108,10 +110,9 @@ export const GlobalStateProvider = ({ children }) => {
       setUserRole(savedRole);
       setIsLoggedIn(true);
     }
-    setIsAuthLoading(false); // Auth check is complete
+    setIsAuthLoading(false);
   }, []);
 
-  // --- AUTH FUNCTIONS NOW LIVE HERE ---
   const login = async (username, password) => {
     setAuthError('');
     try {
@@ -145,7 +146,6 @@ export const GlobalStateProvider = ({ children }) => {
   };
 
   const value = {
-    // Auth state and functions
     token,
     userRole,
     isLoggedIn,
@@ -153,12 +153,11 @@ export const GlobalStateProvider = ({ children }) => {
     authError,
     login,
     logout,
-    
-    // App state and functions
     platformFilter, setPlatformFilter,
     envFilter, setEnvFilter,
     selectedYear, setSelectedYear,
     yearlyBillingData,
+    previousYearBillingData, // <-- Pass previous year data
     isBillingLoading,
     triggerRefetch,
     isSidebarCollapsed, 

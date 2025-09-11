@@ -13,21 +13,32 @@ billing_bp = Blueprint("billing", __name__)
 @token_required
 def get_billing_services(current_user):
     platform = request.args.get("platform")
-    year = request.args.get("year")
+    year_str = request.args.get("year")
 
-    # --- FIX: The query is now simpler and fetches all data first ---
+    if not year_str:
+        return jsonify({"error": "Year is a required parameter"}), 400
+    
+    # --- FIX: Fetch data for the selected year AND the previous year ---
+    try:
+        current_year = int(year_str)
+        previous_year = current_year - 1
+        years_to_fetch = [current_year, previous_year]
+    except ValueError:
+        return jsonify({"error": "Invalid year format"}), 400
+
     query = db.session.query(Billing, Project.project_name.label("project_name")).join(
         Project, Billing.project_id == Project.id
     )
 
     if platform:
         query = query.filter(Billing.platform == platform)
-    if year:
-        query = query.filter(Billing.billing_year == int(year))
+    
+    # Updated query to fetch both years
+    query = query.filter(Billing.billing_year.in_(years_to_fetch))
+    # --- END FIX ---
 
     services = query.all()
 
-    # Convert all raw data to a dictionary format
     result = [
         {
             "id": s.Billing.id,
@@ -44,19 +55,15 @@ def get_billing_services(current_user):
         for s in services
     ]
 
-    # --- FIX: Step 1 - Apply business rules to the ENTIRE dataset ---
     processed_result = process_billing_data(result)
 
-    # --- FIX: Step 2 - Apply permissions filter AFTER the rules have run ---
     if current_user.role == 'user':
         assigned_project_names = {p.project_name for p in current_user.assigned_projects}
         if not assigned_project_names:
-            return jsonify([]), 200 # Return empty list if user has no projects
+            return jsonify([]), 200 
         
-        # Filter the in-memory list of processed data
         final_result = [item for item in processed_result if item['project_name'] in assigned_project_names]
     else:
-        # Admins and SuperAdmins see everything
         final_result = processed_result
 
     return jsonify(final_result), 200
@@ -66,6 +73,7 @@ def get_billing_services(current_user):
 @token_required
 @role_required(roles=["admin", "superadmin"])
 def upload_csv(current_user):
+    # This function remains unchanged
     file = request.files.get("file")
     platform = request.form.get("platform")
     selected_month = request.form.get("month")
