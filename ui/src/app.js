@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom';
 import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut, Settings, Filter, Tag, ChevronDown, ChevronsLeft, ChevronsRight, FileText } from 'lucide-react';
 import { GlobalStateProvider, GlobalStateContext } from './context/GlobalStateContext';
 
@@ -12,6 +12,17 @@ import SettingsView from './components/SettingsView';
 import PricingView from './components/PricingView';
 import BudgetsView from './components/BudgetsView';
 
+// --- NEW: Centralized page permissions ---
+const pagePermissions = {
+    '/dashboard': ['user', 'admin', 'superadmin'],
+    '/projects': ['user', 'admin', 'superadmin'],
+    '/budgets': ['user', 'admin', 'superadmin'],
+    '/billing': ['user', 'admin', 'superadmin'],
+    '/pricing': ['user', 'admin', 'superadmin'],
+    '/settings': ['admin', 'superadmin'],
+};
+// --- END NEW ---
+
 const Sidebar = () => {
     const { isSidebarCollapsed, setIsSidebarCollapsed, userRole, logout } = useContext(GlobalStateContext);
     const [isPricingMenuOpen, setIsPricingMenuOpen] = useState(false);
@@ -19,6 +30,11 @@ const Sidebar = () => {
 
     const handlePricingNavigation = (tier) => {
         navigate(`/pricing/${tier}`);
+    };
+    
+    // --- NEW: Helper function to check if a user can see a page ---
+    const canView = (path) => {
+        return pagePermissions[path]?.includes(userRole);
     };
 
     const navLinkClasses = "flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors text-gray-700 hover:bg-gray-100";
@@ -32,20 +48,20 @@ const Sidebar = () => {
             </div>
 
             <div className="flex flex-col space-y-2">
-                <NavLink to="/dashboard" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
+                {canView('/dashboard') && <NavLink to="/dashboard" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
                     <LayoutDashboard size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Dashboard</span>}
-                </NavLink>
-                <NavLink to="/projects" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
+                </NavLink>}
+                {canView('/projects') && <NavLink to="/projects" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
                     <FolderOpen size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Projects</span>}
-                </NavLink>
-                 <NavLink to="/budgets" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
+                </NavLink>}
+                 {canView('/budgets') && <NavLink to="/budgets" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
                     <FileText size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Budgets</span>}
-                </NavLink>
-                <NavLink to="/billing" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
+                </NavLink>}
+                {canView('/billing') && <NavLink to="/billing" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
                     <BarChart3 size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Billing</span>}
-                </NavLink>
+                </NavLink>}
                 
-                <div>
+                {canView('/pricing') && <div>
                     <button onClick={() => setIsPricingMenuOpen(!isPricingMenuOpen)} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors text-gray-700 hover:bg-gray-100 ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
                         <div className="flex items-center space-x-3"><Tag size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Project Pricing</span>}</div>
                         {!isSidebarCollapsed && <ChevronDown size={20} className={`transform transition-transform duration-200 ${isPricingMenuOpen ? 'rotate-180' : ''}`} />}
@@ -57,13 +73,11 @@ const Sidebar = () => {
                             <button onClick={() => handlePricingNavigation('premium')} className="w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 text-gray-600">GCP Premium</button>
                         </div>
                     )}
-                </div>
+                </div>}
 
-                {(userRole === 'admin' || userRole === 'superadmin') && (
-                    <NavLink to="/settings" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
-                        <Settings size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Settings</span>}
-                    </NavLink>
-                )}
+                {canView('/settings') && <NavLink to="/settings" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
+                    <Settings size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Settings</span>}
+                </NavLink>}
             </div>
 
             <div className="mt-auto flex flex-col space-y-2">
@@ -94,52 +108,28 @@ const GlobalFilters = () => {
     );
 };
 
+// --- NEW: A component to protect routes based on user role ---
+const ProtectedRoute = ({ path, element }) => {
+    const { userRole } = useContext(GlobalStateContext);
+    const canView = pagePermissions[path]?.includes(userRole);
+    return canView ? element : <Navigate to="/dashboard" replace />;
+};
+
 const AppContent = () => {
     return (
         <>
-            {/* --- FIX: Final, robust global style block for printing --- */}
-            <style>
-                {`
-                    @media print {
-                        body {
-                            -webkit-print-color-adjust: exact;
-                        }
-                        /* Hide elements not meant for printing */
-                        .no-print, .main-sidebar {
-                            display: none !important;
-                        }
-                        /* This is the key: Reset the main content area for printing */
-                        .main-content-area {
-                            overflow: visible !important;
-                            height: auto !important;
-                            padding: 0 !important;
-                            margin: 0 !important;
-                            width: 100% !important; /* Ensure content uses full width */
-                        }
-                         /* This class no longer needs padding as the @page rule handles it */
-                        .printable-content {
-                           box-shadow: none !important;
-                           border: none !important;
-                        }
-                        /* Set the page size and margins directly in the @page rule */
-                        @page {
-                            size: A4 portrait;
-                            margin: 0.75in; /* This creates a symmetrical margin */
-                        }
-                    }
-                `}
-            </style>
+            <style> {` @media print { body { -webkit-print-color-adjust: exact; } .no-print, .main-sidebar { display: none !important; } .main-content-area { overflow: visible !important; height: auto !important; padding: 0 !important; margin: 0 !important; width: 100% !important; } .printable-content { box-shadow: none !important; border: none !important; } @page { size: A4 portrait; margin: 0.75in; } } `} </style>
             <div className="flex min-h-screen bg-slate-100 font-sans">
                 <Sidebar />
                 <div className="main-content-area flex-1 p-4 sm:p-8 overflow-y-auto relative z-0">
                     <Routes>
-                        <Route path="/dashboard" element={<DashboardView />} />
-                        <Route path="/projects" element={<><GlobalFilters /><ProjectsView /></>} />
-                        <Route path="/billing" element={<><GlobalFilters /><BillingView /></>} />
-                        <Route path="/budgets" element={<BudgetsView />} />
-                        <Route path="/pricing/:tier" element={<PricingView />} />
-                        <Route path="/settings" element={<SettingsView />} />
-                        <Route path="/" element={<DashboardView />} />
+                        <Route path="/dashboard" element={<ProtectedRoute path="/dashboard" element={<DashboardView />} />} />
+                        <Route path="/projects" element={<ProtectedRoute path="/projects" element={<><GlobalFilters /><ProjectsView /></>} />} />
+                        <Route path="/billing" element={<ProtectedRoute path="/billing" element={<><GlobalFilters /><BillingView /></>} />} />
+                        <Route path="/budgets" element={<ProtectedRoute path="/budgets" element={<BudgetsView />} />} />
+                        <Route path="/pricing/:tier" element={<ProtectedRoute path="/pricing" element={<PricingView />} />} />
+                        <Route path="/settings" element={<ProtectedRoute path="/settings" element={<SettingsView />} />} />
+                        <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     </Routes>
                 </div>
             </div>

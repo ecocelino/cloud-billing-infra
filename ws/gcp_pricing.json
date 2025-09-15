@@ -1,215 +1,216 @@
 {
     "basic": {
-        "title": "GCP CLOUD SERVICES - BASIC",
-        "total": 632.23,
-        "total_php": 37137.19,
         "services": [
             {
-                "service_name": "Compute VM",
                 "instance": "Application (API & Frontend)",
-                "specs_vcpu": "4 vCPU",
+                "price": 196.92,
+                "service_name": "Compute VM",
                 "specs_memory": "16 GB",
-                "storage": "200 GB",
-                "price": 196.92
+                "specs_vcpu": "4 vCPU",
+                "storage": "200 GB"
             },
             {
-                "service_name": "Compute VM",
                 "instance": "Application (Services)",
-                "specs_vcpu": "4 vCPU",
-                "specs_memory": "16 GB",
-                "storage": "200 GB",
-                "price": 196.92
-            },
-            {
+                "price": 196.92,
                 "service_name": "Compute VM",
+                "specs_memory": "16 GB",
+                "specs_vcpu": "4 vCPU",
+                "storage": "200 GB"
+            },
+            {
                 "instance": "Bastion Host",
-                "specs_vcpu": "2 vCPU",
+                "price": 8.64,
+                "service_name": "Compute VM",
                 "specs_memory": "0.5 GB",
-                "storage": "20 GB",
-                "price": 8.64
-            },
-            {
-                "service_name": "SQL",
-                "instance": "MySQL 8.x.x",
                 "specs_vcpu": "2 vCPU",
+                "storage": "20 GB"
+            },
+            {
+                "instance": "MySQL 8.x.x",
+                "price": 185.64,
+                "service_name": "SQL",
                 "specs_memory": "7.5 GB",
-                "storage": "200 GB",
-                "price": 185.64
+                "specs_vcpu": "2 vCPU",
+                "storage": "200 GB"
             },
             {
-                "service_name": "NAT Gateway",
                 "instance": "NAT Gateway",
-                "specs_vcpu": "",
+                "price": 24.06,
+                "service_name": "NAT Gateway",
                 "specs_memory": "",
-                "storage": "",
-                "price": 24.06
+                "specs_vcpu": "",
+                "storage": ""
             },
             {
-                "service_name": "Elastic Load Balancer",
                 "instance": "Application Load Balancer",
-                "specs_vcpu": "",
+                "price": 20.05,
+                "service_name": "Elastic Load Balancer",
                 "specs_memory": "",
-                "storage": "",
-                "price": 20.05
+                "specs_vcpu": "",
+                "storage": ""
             }
-        ]
+        ],
+        "title": "GCP CLOUD SERVICES - BASIC",
+        "total": 632.2299999999998,
+        "total_php": 37137.19
     },
-    "standard": {
-        "title": "GCP CLOUD SERVICES - STANDARD",
-        "total": 1484.93,
-        "total_php": 87224.79,
+    "exchange_rate_info": null,
+    "premium": {
         "services": [
             {
-                "service_name": "GKE",
                 "instance": "GKE Cluster",
-                "specs_vcpu": "",
+                "price": 73,
+                "service_name": "GKE",
                 "specs_memory": "",
-                "storage": "",
-                "price": 73.0
+                "specs_vcpu": "",
+                "storage": ""
             },
             {
-                "service_name": "Compute VM",
                 "instance": "Node Worker",
-                "specs_vcpu": "4 vCPU",
+                "price": 1804.17,
+                "service_name": "Compute VM",
                 "specs_memory": "16 GB",
-                "storage": "50 GB",
-                "price": 721.67
-            },
-            {
-                "service_name": "Compute VM",
-                "instance": "Bastion Host",
-                "specs_vcpu": "1 vCPU",
-                "specs_memory": "1 GB",
-                "storage": "20 GB",
-                "price": 8.64
-            },
-            {
-                "service_name": "SQL",
-                "instance": "MySQL 8.x.x",
                 "specs_vcpu": "4 vCPU",
-                "specs_memory": "15 GB",
-                "storage": "200 GB",
-                "price": 323.69
+                "storage": "50 GB"
             },
             {
+                "instance": "Bastion Host",
+                "price": 8.64,
                 "service_name": "Compute VM",
+                "specs_memory": "1 GB",
+                "specs_vcpu": "1 vCPU",
+                "storage": "20 GB"
+            },
+            {
+                "instance": "MySQL 8.x.x",
+                "price": 614.08,
+                "service_name": "SQL",
+                "specs_memory": "32 GB",
+                "specs_vcpu": "8 vCPU",
+                "storage": "200 GB"
+            },
+            {
                 "instance": "ElasticSearch",
-                "specs_vcpu": "2 vCPU",
-                "specs_memory": "8 GB",
-                "storage": "200 GB",
-                "price": 109.46
-            },
-            {
+                "price": 196.92,
                 "service_name": "Compute VM",
+                "specs_memory": "16 GB",
+                "specs_vcpu": "4 vCPU",
+                "storage": "200 GB"
+            },
+            {
                 "instance": "RabbitMQ",
-                "specs_vcpu": "2 vCPU",
-                "specs_memory": "8 GB",
-                "storage": "200 GB",
-                "price": 109.46
+                "price": 196.92,
+                "service_name": "Compute VM",
+                "specs_memory": "16 GB",
+                "specs_vcpu": "4 vCPU",
+                "storage": "200 GB"
             },
             {
-                "service_name": "Memorystore for Redis",
                 "instance": "Redis",
-                "specs_vcpu": "",
+                "price": 189.8,
+                "service_name": "Memorystore for Redis",
                 "specs_memory": "4 GB",
-                "storage": "",
-                "price": 94.9
+                "specs_vcpu": "",
+                "storage": ""
             },
             {
-                "service_name": "NAT Gateway",
                 "instance": "NAT Gateway",
-                "specs_vcpu": "",
+                "price": 24.06,
+                "service_name": "NAT Gateway",
                 "specs_memory": "",
-                "storage": "",
-                "price": 24.06
+                "specs_vcpu": "",
+                "storage": ""
             },
             {
-                "service_name": "Cloud Load Balancing",
                 "instance": "Application Load Balancer",
-                "specs_vcpu": "",
+                "price": 20.05,
+                "service_name": "Cloud Load Balancing",
                 "specs_memory": "",
-                "storage": "",
-                "price": 20.05
+                "specs_vcpu": "",
+                "storage": ""
             }
-        ]
-    },
-    "premium": {
+        ],
         "title": "GCP CLOUD SERVICES - PREMIUM",
         "total": 3127.64,
-        "total_php": 183717.57,
+        "total_php": 183717.57
+    },
+    "standard": {
         "services": [
             {
-                "service_name": "GKE",
                 "instance": "GKE Cluster",
-                "specs_vcpu": "",
+                "price": 73,
+                "service_name": "GKE",
                 "specs_memory": "",
-                "storage": "",
-                "price": 73.0
+                "specs_vcpu": "",
+                "storage": ""
             },
             {
-                "service_name": "Compute VM",
                 "instance": "Node Worker",
-                "specs_vcpu": "4 vCPU",
+                "price": 721.67,
+                "service_name": "Compute VM",
                 "specs_memory": "16 GB",
-                "storage": "50 GB",
-                "price": 1804.17
+                "specs_vcpu": "4 vCPU",
+                "storage": "50 GB"
             },
             {
-                "service_name": "Compute VM",
                 "instance": "Bastion Host",
-                "specs_vcpu": "1 vCPU",
+                "price": 8.64,
+                "service_name": "Compute VM",
                 "specs_memory": "1 GB",
-                "storage": "20 GB",
-                "price": 8.64
+                "specs_vcpu": "1 vCPU",
+                "storage": "20 GB"
             },
             {
-                "service_name": "SQL",
                 "instance": "MySQL 8.x.x",
-                "specs_vcpu": "8 vCPU",
-                "specs_memory": "32 GB",
-                "storage": "200 GB",
-                "price": 614.08
+                "price": 323.69,
+                "service_name": "SQL",
+                "specs_memory": "15 GB",
+                "specs_vcpu": "4 vCPU",
+                "storage": "200 GB"
             },
             {
-                "service_name": "Compute VM",
                 "instance": "ElasticSearch",
-                "specs_vcpu": "4 vCPU",
-                "specs_memory": "16 GB",
-                "storage": "200 GB",
-                "price": 196.92
-            },
-            {
+                "price": 109.46,
                 "service_name": "Compute VM",
+                "specs_memory": "8 GB",
+                "specs_vcpu": "2 vCPU",
+                "storage": "200 GB"
+            },
+            {
                 "instance": "RabbitMQ",
-                "specs_vcpu": "4 vCPU",
-                "specs_memory": "16 GB",
-                "storage": "200 GB",
-                "price": 196.92
+                "price": 109.46,
+                "service_name": "Compute VM",
+                "specs_memory": "8 GB",
+                "specs_vcpu": "2 vCPU",
+                "storage": "200 GB"
             },
             {
-                "service_name": "Memorystore for Redis",
                 "instance": "Redis",
-                "specs_vcpu": "",
+                "price": 94.9,
+                "service_name": "Memorystore for Redis",
                 "specs_memory": "4 GB",
-                "storage": "",
-                "price": 189.8
+                "specs_vcpu": "",
+                "storage": ""
             },
             {
-                "service_name": "NAT Gateway",
                 "instance": "NAT Gateway",
-                "specs_vcpu": "",
+                "price": 24.06,
+                "service_name": "NAT Gateway",
                 "specs_memory": "",
-                "storage": "",
-                "price": 24.06
+                "specs_vcpu": "",
+                "storage": ""
             },
             {
-                "service_name": "Cloud Load Balancing",
                 "instance": "Application Load Balancer",
-                "specs_vcpu": "",
+                "price": 20.05,
+                "service_name": "Cloud Load Balancing",
                 "specs_memory": "",
-                "storage": "",
-                "price": 20.05
+                "specs_vcpu": "",
+                "storage": ""
             }
-        ]
+        ],
+        "title": "GCP CLOUD SERVICES - STANDARD",
+        "total": 1484.93,
+        "total_php": 87224.79
     }
 }

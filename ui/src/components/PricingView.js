@@ -24,15 +24,20 @@ const EditableField = ({ initialValue, onDebouncedChange, type = 'text', classNa
 const PricingCard = ({ tier, onTierChange, onRemoveService, onAddService, exchangeRateInfo, isEditable }) => {
     if (!tier) return null;
 
-    const handleServiceChange = (serviceIndex, field, value) => {
-        const updatedServices = [...tier.services];
-        const targetService = { ...updatedServices[serviceIndex] };
-        targetService[field] = value;
-        updatedServices[serviceIndex] = targetService;
+    const handleServiceChange = useCallback((serviceIndex, field, value) => {
+        const updatedServices = tier.services.map((service, index) => {
+            if (index === serviceIndex) {
+                return { ...service, [field]: value };
+            }
+            return service;
+        });
         onTierChange({ ...tier, services: updatedServices });
-    };
+    }, [tier, onTierChange]);
 
-    const monthlyTotalUSD = tier.services.reduce((acc, service) => acc + (parseFloat(service.price) || 0), 0);
+    const monthlyTotalUSD = useMemo(() => 
+        tier.services.reduce((acc, service) => acc + (parseFloat(service.price) || 0), 0),
+        [tier.services]
+    );
     const monthlyTotalPHP = monthlyTotalUSD * (exchangeRateInfo?.rate || 0);
 
     return (
@@ -163,24 +168,27 @@ const PricingView = () => {
         }
     };
     
-    const handleTierChange = (tierKey, updatedTier) => {
-        const newPricingData = { ...pricingData, [tierKey]: updatedTier };
-        const monthlyTotalUSD = updatedTier.services.reduce((acc, service) => acc + (parseFloat(service.price) || 0), 0);
-        newPricingData[tierKey].total = monthlyTotalUSD;
-        setPricingData(newPricingData);
-    };
+    const handleTierChange = useCallback((tierKey, updatedTier) => {
+        setPricingData(currentData => {
+            const monthlyTotalUSD = updatedTier.services.reduce((acc, service) => acc + (parseFloat(service.price) || 0), 0);
+            const finalTier = { ...updatedTier, total: monthlyTotalUSD };
+            return { ...currentData, [tierKey]: finalTier };
+        });
+    }, []);
 
-    const handleAddService = (tierKey) => {
-        const newService = { service_name: "New Service", instance: "", specs_vcpu: "", specs_memory: "", storage: "", price: 0 };
+    const handleAddService = useCallback((tierKey) => {
+        if (!pricingData) return;
+        const newService = { service_name: "New Service", instance: "", specs_vcpu: "", specs_memory: "", storage: "", price: "0" };
         const updatedTier = { ...pricingData[tierKey], services: [...pricingData[tierKey].services, newService] };
         handleTierChange(tierKey, updatedTier);
-    };
+    }, [pricingData, handleTierChange]);
 
-    const handleRemoveService = (tierKey, serviceIndex) => {
+    const handleRemoveService = useCallback((tierKey, serviceIndex) => {
+        if (!pricingData) return;
         const updatedServices = pricingData[tierKey].services.filter((_, index) => index !== serviceIndex);
         const updatedTier = { ...pricingData[tierKey], services: updatedServices };
         handleTierChange(tierKey, updatedTier);
-    };
+    }, [pricingData, handleTierChange]);
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -206,7 +214,7 @@ const PricingView = () => {
     };
     
     const handleCancel = () => {
-        setPricingData(originalData);
+        setPricingData(JSON.parse(JSON.stringify(originalData)));
     };
 
     const handleExportPDF = () => {
@@ -222,16 +230,27 @@ const PricingView = () => {
         }
         const tableColumn = ["Service", "Instance", "Specs", "Price (USD)"];
         const tableRows = [];
+        
         tierData.services.forEach(service => {
             const specs = [ service.specs_vcpu || '', service.specs_memory || '', service.storage || '' ].filter(Boolean).join('\n');
-            const serviceData = [ service.service_name, service.instance, specs, { content: `$${parseFloat(service.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right' } } ];
+            const serviceData = [ 
+                service.service_name, 
+                service.instance, 
+                specs, 
+                { content: `$${(parseFloat(service.price) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right' } } 
+            ];
             tableRows.push(serviceData);
         });
-        const monthlyTotalUSD = tierData.services.reduce((acc, service) => acc + (parseFloat(service.price) || 0), 0);
+        
+        const monthlyTotalUSD = tierData.total || 0;
         const monthlyTotalPHP = monthlyTotalUSD * (pricingData.exchange_rate_info?.rate || 0);
+        
         tableRows.push([{ content: '', colSpan: 4, styles: { minCellHeight: 4 } }]);
         tableRows.push([ { content: 'Monthly Total (USD):', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', fontSize: 12 } }, { content: `$${monthlyTotalUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right', fontStyle: 'bold', fontSize: 12 } } ]);
-        tableRows.push([ { content: 'Monthly Total (PHP):', colSpan: 3, styles: { halign: 'right', fontSize: 11, textColor: [100, 100, 100] } }, { content: `₱${monthlyTotalPHP.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'left', fontSize: 11, textColor: [100, 100, 100] } } ]);
+        tableRows.push([ { content: 'Monthly Total (PHP):', colSpan: 3, styles: { halign: 'right', fontSize: 11, textColor: [100, 100, 100] } }, { content: `₱${monthlyTotalPHP.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right', fontSize: 11, textColor: [100, 100, 100] } } ]);
+        
+        let finalY = 0;
+
         autoTable(doc, {
             head: [tableColumn],
             body: tableRows,
@@ -244,9 +263,12 @@ const PricingView = () => {
                     data.cell.styles.fillColor = '#f8f9fa';
                     data.cell.styles.lineWidth = 0;
                 }
+            },
+            didDrawPage: function (data) {
+                finalY = data.cursor.y;
             }
         });
-        const finalY = doc.autoTable.previous.finalY;
+
         doc.setFontSize(8);
         doc.setTextColor(150);
         doc.text( '*Note: Pricing is based on the Google Cloud Pricing Calculator and is an estimate. Actual costs may vary.', 14, finalY + 10 );
@@ -289,7 +311,7 @@ const PricingView = () => {
                             </button>
 
                             <div className="flex flex-col items-stretch gap-y-4 sm:flex-row-reverse sm:items-center sm:gap-x-4">
-                                <button onClick={handleSave} disabled={!hasChanges || isSaving} className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed flex-shrink-0">
+                                <button onClick={handleSave} disabled={!hasChanges || isSaving} className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center">
                                     {isSaving ? <><Loader2 size={20} className="animate-spin mr-2"/>Saving...</> : 'Save Changes'}
                                 </button>
                                 {hasChanges && !isSaving && (
@@ -333,4 +355,3 @@ const PricingView = () => {
 };
 
 export default PricingView;
-
