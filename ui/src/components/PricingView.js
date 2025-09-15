@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useContext } from 'react';
 import { useParams } from 'react-router-dom';
 import { GlobalStateContext } from '../context/GlobalStateContext';
-import { Server, Database, Cpu, Trash2, PlusCircle, AlertCircle, CheckCircle, Download, Loader2, RefreshCw } from 'lucide-react';
+import { Server, Database, Cpu, Trash2, PlusCircle, AlertCircle, CheckCircle, Download, Loader2, RefreshCw, Save } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -117,6 +117,9 @@ const PricingView = () => {
     const [activeTier, setActiveTier] = useState(initialTier || 'basic');
     const [isUpdatingRate, setIsUpdatingRate] = useState(false);
     const [updateStatus, setUpdateStatus] = useState({ message: '', type: 'idle' });
+    const [manualRate, setManualRate] = useState('');
+    const [isSavingManualRate, setIsSavingManualRate] = useState(false);
+    const [manualRateStatus, setManualRateStatus] = useState({ message: '', type: 'idle' });
 
     const isEditable = userRole === 'admin' || userRole === 'superadmin';
 
@@ -159,12 +162,43 @@ const PricingView = () => {
             const result = await response.json();
             if (!response.ok) throw new Error(result.error);
             setUpdateStatus({ message: result.message, type: 'success' });
-            fetchPricingData();
+            await fetchPricingData();
         } catch (err) {
             setUpdateStatus({ message: err.message, type: 'error' });
         } finally {
             setIsUpdatingRate(false);
              setTimeout(() => setUpdateStatus({ message: '', type: 'idle' }), 5000);
+        }
+    };
+
+    const handleManualRateSave = async () => {
+        const rateValue = parseFloat(manualRate);
+        if (!rateValue || rateValue <= 0) {
+            setManualRateStatus({ message: 'Please enter a valid, positive number.', type: 'error' });
+            setTimeout(() => setManualRateStatus({ message: '', type: 'idle' }), 3000);
+            return;
+        }
+
+        setIsSavingManualRate(true);
+        setManualRateStatus({ message: 'Saving...', type: 'loading' });
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/exchange-rate/manual-update`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+                body: JSON.stringify({ rate: rateValue }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Failed to save manual rate.');
+
+            setManualRateStatus({ message: result.message, type: 'success' });
+            setManualRate('');
+            await fetchPricingData();
+        } catch (err) {
+            setManualRateStatus({ message: err.message, type: 'error' });
+        } finally {
+            setIsSavingManualRate(false);
+            setTimeout(() => setManualRateStatus({ message: '', type: 'idle' }), 5000);
         }
     };
     
@@ -224,10 +258,24 @@ const PricingView = () => {
         doc.setFontSize(18);
         doc.text(tierData.title, 14, 22);
         doc.setFontSize(10);
-        if (pricingData.exchange_rate_info) {
-             const exchangeInfo = `Exchange Rate: ₱${pricingData.exchange_rate_info.rate.toFixed(4)} as of ${pricingData.exchange_rate_info.last_updated}`;
-             doc.text(exchangeInfo, 14, 30);
+        
+        if (pricingData.exchange_rate_info && pricingData.exchange_rate_info.last_updated) {
+            const utcDate = new Date(pricingData.exchange_rate_info.last_updated);
+            const options = {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                timeZone: 'Asia/Manila',
+                hour12: true
+            };
+            const manilaTimestamp = new Intl.DateTimeFormat('en-US', options).format(utcDate) + " PHT";
+            const exchangeInfo = `Exchange Rate: ₱${pricingData.exchange_rate_info.rate.toFixed(4)} as of ${manilaTimestamp}`;
+            doc.text(exchangeInfo, 14, 30);
         }
+
         const tableColumn = ["Service", "Instance", "Specs", "Price (USD)"];
         const tableRows = [];
         
@@ -247,7 +295,7 @@ const PricingView = () => {
         
         tableRows.push([{ content: '', colSpan: 4, styles: { minCellHeight: 4 } }]);
         tableRows.push([ { content: 'Monthly Total (USD):', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', fontSize: 12 } }, { content: `$${monthlyTotalUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right', fontStyle: 'bold', fontSize: 12 } } ]);
-        tableRows.push([ { content: 'Monthly Total (PHP):', colSpan: 3, styles: { halign: 'right', fontSize: 11, textColor: [100, 100, 100] } }, { content: `₱${monthlyTotalPHP.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right', fontSize: 11, textColor: [100, 100, 100] } } ]);
+        tableRows.push([ { content: 'Monthly Total (PHP):', colSpan: 3, styles: { halign: 'right', fontSize: 11, textColor: [100, 100, 100] } }, { content: `₱${monthlyTotalPHP.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'left', fontSize: 11, textColor: [100, 100, 100] } } ]);
         
         let finalY = 0;
 
@@ -302,20 +350,54 @@ const PricingView = () => {
                     <h2 className="text-3xl font-bold text-gray-900 tracking-tight">GCP Infrastructure Pricing</h2>
                     <p className="mt-1 text-gray-600">Details for the selected pricing tier.</p>
                 </div>
-                 <div className="flex flex-col items-stretch gap-y-4 sm:flex-row sm:items-center sm:gap-x-4">
+                 <div className="flex items-start flex-wrap gap-4">
                     {isEditable && (
-                        <>
-                            <button onClick={handleUpdateRate} disabled={isUpdatingRate} className="flex items-center justify-center gap-2 bg-teal-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-teal-600 transition-all flex-shrink-0 disabled:bg-gray-400">
-                                {isUpdatingRate ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
-                                <span>Update Rate</span>
-                            </button>
+                        <div className="flex flex-col gap-2 p-3 border rounded-lg bg-gray-50">
+                            <div className="flex items-center gap-2">
+                                <button onClick={handleUpdateRate} disabled={isUpdatingRate} className="flex items-center justify-center gap-2 bg-teal-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-teal-600 transition-all disabled:bg-gray-400">
+                                    {isUpdatingRate ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
+                                    <span>Auto-Update Rate</span>
+                                </button>
+                                {updateStatus.type !== 'idle' && (
+                                    <span className={`text-sm ${updateStatus.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>{updateStatus.message}</span>
+                                )}
+                            </div>
+                            <div className="text-xs text-center text-gray-500">or</div>
+                            <div className="flex items-center gap-2">
+                                <div className="relative">
+                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500">₱</span>
+                                    <input
+                                        type="number"
+                                        value={manualRate}
+                                        onChange={(e) => setManualRate(e.target.value)}
+                                        placeholder="Manual Rate"
+                                        className="pl-6 pr-2 py-2 border rounded-lg w-36 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                        disabled={isSavingManualRate}
+                                    />
+                                </div>
+                                <button
+                                    onClick={handleManualRateSave}
+                                    disabled={isSavingManualRate || !manualRate}
+                                    className="flex items-center justify-center gap-2 bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-700 transition-all disabled:bg-gray-400"
+                                >
+                                    {isSavingManualRate ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                                    <span>Save Rate</span>
+                                </button>
+                            </div>
+                            {manualRateStatus.type !== 'idle' && (
+                                <div className={`text-sm text-center mt-1 ${manualRateStatus.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>{manualRateStatus.message}</div>
+                            )}
+                        </div>
+                    )}
 
-                            <div className="flex flex-col items-stretch gap-y-4 sm:flex-row-reverse sm:items-center sm:gap-x-4">
+                    <div className="flex-grow flex items-center justify-start md:justify-end gap-4">
+                         {isEditable && (
+                            <div className="flex items-center gap-x-4">
                                 <button onClick={handleSave} disabled={!hasChanges || isSaving} className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center">
                                     {isSaving ? <><Loader2 size={20} className="animate-spin mr-2"/>Saving...</> : 'Save Changes'}
                                 </button>
                                 {hasChanges && !isSaving && (
-                                    <button onClick={handleCancel} className="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-300 transition-all flex-shrink-0">
+                                    <button onClick={handleCancel} className="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-300 transition-all">
                                         Cancel
                                     </button>
                                 )}
@@ -326,20 +408,14 @@ const PricingView = () => {
                                     </div>
                                 )}
                             </div>
-                        </>
-                    )}
-                    <button onClick={handleExportPDF} className="flex items-center justify-center gap-2 bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-700 transition-all flex-shrink-0">
-                       <Download size={18} />
-                       <span>Export PDF</span>
-                    </button>
+                         )}
+                        <button onClick={handleExportPDF} className="bg-gray-800 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-black transition-all flex items-center justify-center gap-2">
+                           <Download size={18} />
+                           <span>Export PDF</span>
+                        </button>
+                    </div>
                 </div>
             </header>
-            
-            {updateStatus.message && (
-                <div className={`text-center text-sm font-medium p-2 rounded-md no-print ${updateStatus.type === 'success' ? 'bg-green-100 text-green-800' : updateStatus.type === 'error' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`}>
-                    {updateStatus.message}
-                </div>
-            )}
             
             <div className="mt-6">
                 {pricingData && activeTier && pricingData[activeTier] ? (

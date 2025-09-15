@@ -7,7 +7,7 @@ import requests
 
 pricing_bp = Blueprint("pricing", __name__)
 
-# This route remains the same, handling GET requests for anyone with a valid token.
+# ... (get_gcp_pricing and save_gcp_pricing routes remain the same) ...
 @pricing_bp.route("/api/pricing/gcp", methods=["GET"])
 @token_required
 def get_gcp_pricing(current_user):
@@ -31,27 +31,21 @@ def get_gcp_pricing(current_user):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- NEW ROUTE TO HANDLE SAVING ---
-# This new route listens for POST requests on the same URL.
 @pricing_bp.route("/api/pricing/gcp", methods=["POST"])
 @token_required
-@role_required(roles=["admin", "superadmin"]) # Added role protection
+@role_required(roles=["admin", "superadmin"])
 def save_gcp_pricing(current_user):
     try:
-        # Get the JSON data sent from the React frontend
         data_to_save = request.get_json()
 
         if not data_to_save:
             return jsonify({"error": "No data provided in request body."}), 400
 
-        # Write the new data to the gcp_pricing.json file, overwriting it.
-        # Using indent=4 makes the saved JSON file easy to read.
         with open('gcp_pricing.json', 'w') as f:
             json.dump(data_to_save, f, indent=4)
         
         return jsonify({"message": "Pricing data saved successfully."}), 200
     except Exception as e:
-        # Return a generic server error if something goes wrong during the file write.
         return jsonify({"error": f"An error occurred while saving the file: {str(e)}"}), 500
 
 
@@ -90,6 +84,42 @@ def update_exchange_rate(current_user):
 
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Could not connect to the exchange rate service: {e}"}), 503
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+# NEW ROUTE for saving a manually entered exchange rate
+@pricing_bp.route("/api/exchange-rate/manual-update", methods=["POST"])
+@token_required
+@role_required(roles=["admin", "superadmin"])
+def manual_update_exchange_rate(current_user):
+    try:
+        data = request.get_json()
+        new_rate = data.get('rate')
+
+        if not new_rate:
+            return jsonify({"error": "Rate value is missing."}), 400
+        
+        try:
+            rate_value = float(new_rate)
+            if rate_value <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid rate format. Please provide a positive number."}), 400
+
+        # Find the existing rate record or create a new one
+        exchange_rate = ExchangeRate.query.filter_by(source_currency='USD', target_currency='PHP').first()
+        if not exchange_rate:
+            exchange_rate = ExchangeRate(source_currency='USD', target_currency='PHP')
+
+        exchange_rate.rate = rate_value
+        exchange_rate.last_updated = datetime.datetime.utcnow()
+
+        db.session.add(exchange_rate)
+        db.session.commit()
+
+        return jsonify({"message": f"Rate manually updated to {rate_value:.4f}."}), 200
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500

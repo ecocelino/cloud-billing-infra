@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useRef, useEffect } from 'react'; // Added useRef and useEffect
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom';
 import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut, Settings, Filter, Tag, ChevronDown, ChevronsLeft, ChevronsRight, FileText } from 'lucide-react';
 import { GlobalStateProvider, GlobalStateContext } from './context/GlobalStateContext';
@@ -12,7 +12,6 @@ import SettingsView from './components/SettingsView';
 import PricingView from './components/PricingView';
 import BudgetsView from './components/BudgetsView';
 
-// --- NEW: Centralized page permissions ---
 const pagePermissions = {
     '/dashboard': ['user', 'admin', 'superadmin'],
     '/projects': ['user', 'admin', 'superadmin'],
@@ -21,18 +20,61 @@ const pagePermissions = {
     '/pricing': ['user', 'admin', 'superadmin'],
     '/settings': ['admin', 'superadmin'],
 };
-// --- END NEW ---
 
 const Sidebar = () => {
     const { isSidebarCollapsed, setIsSidebarCollapsed, userRole, logout } = useContext(GlobalStateContext);
     const [isPricingMenuOpen, setIsPricingMenuOpen] = useState(false);
     const navigate = useNavigate();
+    
+    // --- UPDATED: Refs for positioning and click-away detection ---
+    const pricingDropdownRef = useRef(null); // Ref for the main button area (including expanded dropdown)
+    const pricingPopupRef = useRef(null); // Ref for the collapsed pop-up menu
+    const tagIconRef = useRef(null); // Ref for the Tag icon to get its position
+
+    const [popupCoords, setPopupCoords] = useState({ top: 0, left: 0 }); // State to store pop-up coordinates
 
     const handlePricingNavigation = (tier) => {
         navigate(`/pricing/${tier}`);
+        setIsPricingMenuOpen(false); // Close menu on selection
     };
     
-    // --- NEW: Helper function to check if a user can see a page ---
+    // --- UPDATED: Hook to close the menu if user clicks outside of it ---
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            // Check if the click occurred outside the main dropdown container (button + expanded menu)
+            // AND outside the floating pop-up menu (if it's rendered)
+            if (
+                pricingDropdownRef.current && 
+                !pricingDropdownRef.current.contains(event.target) &&
+                (
+                    !pricingPopupRef.current || // If popup isn't rendered, this is true
+                    !pricingPopupRef.current.contains(event.target) // If popup is rendered, check if click is outside it
+                )
+            ) {
+                setIsPricingMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
+
+    // --- NEW: Effect to calculate pop-up position when collapsed menu is open ---
+    useEffect(() => {
+        if (isSidebarCollapsed && isPricingMenuOpen && tagIconRef.current) {
+            const rect = tagIconRef.current.getBoundingClientRect();
+            // Position the popup slightly to the right of the icon, vertically centered with the icon
+            setPopupCoords({
+                // Adjust top: align with icon's top, or slightly above/below for centering
+                top: rect.top, 
+                // Position to the right of the icon, with a small gap
+                left: rect.right + 10 
+            });
+        }
+    }, [isSidebarCollapsed, isPricingMenuOpen, tagIconRef.current]); // Recalculate if these dependencies change
+
+
     const canView = (path) => {
         return pagePermissions[path]?.includes(userRole);
     };
@@ -41,7 +83,7 @@ const Sidebar = () => {
     const activeLinkClasses = "bg-blue-500 text-white";
 
     return (
-        <nav className={`main-sidebar bg-white p-4 shadow-lg flex flex-col sticky top-0 h-screen transition-all duration-300 ${isSidebarCollapsed ? 'w-20 items-center' : 'w-64'}`}>
+        <nav className={`main-sidebar bg-white p-4 shadow-lg flex flex-col sticky top-0 h-screen transition-all duration-300 z-20 ${isSidebarCollapsed ? 'w-20 items-center' : 'w-64'}`}> {/* Added z-20 to sidebar */}
             <div className={`flex items-center space-x-2 mb-10 px-2 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
                 <Cloud size={40} className="text-blue-600 flex-shrink-0" />
                 {!isSidebarCollapsed && <h1 className="text-xl font-bold text-gray-900">Cloud Cost System</h1>}
@@ -61,19 +103,43 @@ const Sidebar = () => {
                     <BarChart3 size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Billing</span>}
                 </NavLink>}
                 
-                {canView('/pricing') && <div>
-                    <button onClick={() => setIsPricingMenuOpen(!isPricingMenuOpen)} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors text-gray-700 hover:bg-gray-100 ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
-                        <div className="flex items-center space-x-3"><Tag size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Project Pricing</span>}</div>
-                        {!isSidebarCollapsed && <ChevronDown size={20} className={`transform transition-transform duration-200 ${isPricingMenuOpen ? 'rotate-180' : ''}`} />}
-                    </button>
-                    {isPricingMenuOpen && !isSidebarCollapsed && (
-                        <div className="pt-2 pl-6 space-y-1">
-                            <button onClick={() => handlePricingNavigation('basic')} className="w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 text-gray-600">GCP Basic</button>
-                            <button onClick={() => handlePricingNavigation('standard')} className="w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 text-gray-600">GCP Standard</button>
-                            <button onClick={() => handlePricingNavigation('premium')} className="w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 text-gray-600">GCP Premium</button>
-                        </div>
-                    )}
-                </div>}
+                {/* --- UPDATED PRICING SECTION --- */}
+                {canView('/pricing') && 
+                    <div ref={pricingDropdownRef} className="relative"> {/* Use pricingDropdownRef here */}
+                        <button onClick={() => setIsPricingMenuOpen(prev => !prev)} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors text-gray-700 hover:bg-gray-100 ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+                            <div className="flex items-center space-x-3">
+                                <Tag ref={tagIconRef} size={20} className="flex-shrink-0" /> {/* Added ref to Tag icon */}
+                                {!isSidebarCollapsed && <span>Project Pricing</span>}
+                            </div>
+                            {!isSidebarCollapsed && <ChevronDown size={20} className={`transform transition-transform duration-200 ${isPricingMenuOpen ? 'rotate-180' : ''}`} />}
+                        </button>
+                        
+                        {/* Dropdown for expanded sidebar */}
+                        {isPricingMenuOpen && !isSidebarCollapsed && (
+                            <div className="pt-2 pl-6 space-y-1">
+                                <button onClick={() => handlePricingNavigation('basic')} className="w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 text-gray-600">GCP Basic</button>
+                                <button onClick={() => handlePricingNavigation('standard')} className="w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 text-gray-600">GCP Standard</button>
+                                <button onClick={() => handlePricingNavigation('premium')} className="w-full text-left px-3 py-1 rounded text-sm hover:bg-gray-100 text-gray-600">GCP Premium</button>
+                            </div>
+                        )}
+
+                        {/* --- NEW: Pop-up menu for collapsed sidebar with fixed positioning --- */}
+                        {isPricingMenuOpen && isSidebarCollapsed && (
+                            <div
+                                ref={pricingPopupRef} // Added ref to the popup itself
+                                style={{ top: popupCoords.top, left: popupCoords.left }}
+                                className="fixed p-2 bg-white rounded-lg shadow-xl border w-44 z-50" // `fixed` position and high `z-index`
+                            >
+                                <h4 className="px-2 pt-1 pb-2 text-sm font-semibold text-gray-500 border-b mb-1">Select Tier</h4>
+                                <div className="flex flex-col space-y-1">
+                                    <button onClick={() => handlePricingNavigation('basic')} className="w-full text-left px-2 py-1.5 rounded text-sm hover:bg-gray-100 text-gray-600">GCP Basic</button>
+                                    <button onClick={() => handlePricingNavigation('standard')} className="w-full text-left px-2 py-1.5 rounded text-sm hover:bg-gray-100 text-gray-600">GCP Standard</button>
+                                    <button onClick={() => handlePricingNavigation('premium')} className="w-full text-left px-2 py-1.5 rounded text-sm hover:bg-gray-100 text-gray-600">GCP Premium</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                }
 
                 {canView('/settings') && <NavLink to="/settings" className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''}`}>
                     <Settings size={20} className="flex-shrink-0" />{!isSidebarCollapsed && <span>Settings</span>}
@@ -108,7 +174,6 @@ const GlobalFilters = () => {
     );
 };
 
-// --- NEW: A component to protect routes based on user role ---
 const ProtectedRoute = ({ path, element }) => {
     const { userRole } = useContext(GlobalStateContext);
     const canView = pagePermissions[path]?.includes(userRole);
@@ -162,4 +227,3 @@ const App = () => {
 };
 
 export default App;
-
