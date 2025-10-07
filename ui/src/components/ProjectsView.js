@@ -44,7 +44,7 @@ const ServiceBreakdownView = ({ services, selectedMonth, isPrinting = false }) =
     };
 
     if (aggregatedServices.length === 0) {
-        return <p className="text-gray-500 italic no-print">No service costs recorded for this month.</p>;
+        return <p className="text-gray-500 dark:text-gray-400 italic no-print">No service costs recorded for this month.</p>;
     }
 
     return (
@@ -53,17 +53,17 @@ const ServiceBreakdownView = ({ services, selectedMonth, isPrinting = false }) =
                 <li key={serviceName}>
                     <div
                         onClick={() => toggleService(serviceName)}
-                        className="flex justify-between items-center cursor-pointer p-1 rounded hover:bg-slate-200 no-print"
+                        className="flex justify-between items-center cursor-pointer p-1 rounded hover:bg-slate-200 dark:hover:bg-gray-700 no-print"
                     >
                         <div className="flex items-center">
                             {(isPrinting || expandedServices[serviceName]) ? (
-                                <ChevronDown size={16} className="mr-1 text-gray-500" />
+                                <ChevronDown size={16} className="mr-1 text-gray-500 dark:text-gray-400" />
                             ) : (
-                                <ChevronRight size={16} className="mr-1 text-gray-500" />
+                                <ChevronRight size={16} className="mr-1 text-gray-500 dark:text-gray-400" />
                             )}
-                            <span className="font-bold text-gray-800">{serviceName}</span>
+                            <span className="font-bold text-gray-800 dark:text-gray-100">{serviceName}</span>
                         </div>
-                        <span className="font-bold text-gray-800">{formatCurrency(data.totalCost)}</span>
+                        <span className="font-bold text-gray-800 dark:text-gray-100">{formatCurrency(data.totalCost)}</span>
                     </div>
                     <div className="hidden print:flex justify-between items-center p-1">
                         <span className="font-bold text-gray-800 pl-5 text-lg">{serviceName}</span>
@@ -73,9 +73,9 @@ const ServiceBreakdownView = ({ services, selectedMonth, isPrinting = false }) =
                     {(isPrinting || expandedServices[serviceName]) && (
                         <ul className="pl-6 mt-1 space-y-1">
                             {data.skus.sort((a,b) => b.cost - a.cost).map((sku, idx) => (
-                                <li key={idx} className="flex justify-between border-l-2 pl-4 border-slate-300">
-                                    <span className="text-gray-600 text-sm">{sku.sku_description || 'N/A'}</span>
-                                    <span className="font-small text-gray-600 text-sm">{formatCurrency(sku.cost)}</span>
+                                <li key={idx} className="flex justify-between border-l-2 pl-4 border-slate-300 dark:border-gray-600">
+                                    <span className="text-gray-600 dark:text-gray-300 text-sm">{sku.sku_description || 'N/A'}</span>
+                                    <span className="font-small text-gray-600 dark:text-gray-300 text-sm">{formatCurrency(sku.cost)}</span>
                                 </li>
                             ))}
                         </ul>
@@ -270,14 +270,14 @@ const ProjectsView = () => {
     const grandTotalToDisplay = projectsToDisplay.reduce((sum, p) => sum + (p[`${selectedMonth}_cost`] || 0), 0);
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-lg printable-content">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg printable-content">
             <div className="no-print">
-                <h3 className="text-2xl font-semibold text-gray-800 mb-4">Projects Overview</h3>
+                <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Projects Overview</h3>
                 <div className="flex flex-wrap items-center gap-4 mb-4">
                     <select
                         value={selectedMonth}
                         onChange={e => setSelectedMonth(e.target.value)}
-                        className="p-2 border border-gray-300 rounded-lg"
+                        className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200"
                     >
                         <option value="">Select Month...</option>
                         {months.map(m => (
@@ -288,7 +288,7 @@ const ProjectsView = () => {
                     <select
                         value={selectedYear}
                         onChange={e => setSelectedYear(parseInt(e.target.value))}
-                        className="p-2 border border-gray-300 rounded-lg"
+                        className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200"
                     >
                         {years.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
@@ -298,13 +298,13 @@ const ProjectsView = () => {
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                         placeholder="Search..."
-                        className="p-2 border border-gray-300 rounded-lg flex-grow"
+                        className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg flex-grow bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200"
                     />
 
                     <button
                         onClick={() => setIsExportModalOpen(true)}
                         disabled={!selectedMonth}
-                        className="p-2 bg-blue-600 text-white rounded-lg flex items-center gap-2 disabled:bg-gray-400"
+                        className="p-2 bg-blue-600 text-white rounded-lg flex items-center gap-2 disabled:bg-gray-400 dark:disabled:bg-gray-600"
                     >
                         <FileDown size={18} /> Export
                     </button>
@@ -312,7 +312,7 @@ const ProjectsView = () => {
             </div>
       
             {!selectedMonth ? (
-                <div className="text-center py-10 text-gray-500 no-print">Please select a month to view project data.</div>
+                <div className="text-center py-10 text-gray-500 dark:text-gray-400 no-print">Please select a month to view project data.</div>
             ) : (
                 <div className={`printable-area ${isPrinting ? '' : 'overflow-x-auto'}`}>
                     <h3 className="text-2xl font-semibold text-gray-800 mb-4 hidden print:block text-center">
@@ -334,39 +334,38 @@ const ProjectsView = () => {
                         </div>
                     </div>
 
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50 print:table-row-group">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-700/50 print:table-row-group">
                             <tr>
                                 <th className="w-8 no-print"></th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project Code</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Environment</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Team</th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Project</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Project Code</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Environment</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Owner</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Team</th>
+                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
                                 Total Cost ({selectedMonth.toUpperCase()})
                                 </th>
                                 {(userRole === 'admin' || userRole === 'superadmin') && (
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase no-print">Actions</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase no-print">Actions</th>
                                 )}
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200 text-base">
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700 text-base">
                             {projectsToDisplay.map((project) => (
                                 <React.Fragment key={project.project_name}>
                                 <tr
                                     onClick={() => toggleProject(project.project_name)}
-                                    className="cursor-pointer hover:bg-gray-50 print:break-inside-avoid"
+                                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 print:break-inside-avoid"
                                 >
-                                    <td className="px-4 py-4 no-print">
+                                    <td className="px-4 py-4 no-print text-gray-600 dark:text-gray-400">
                                         {expandedProjects[project.project_name] ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap font-medium text-base">{project.project_name}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap font-medium text-base text-gray-900 dark:text-white">{project.project_name}</td>
                                     {['projectCode', 'environment', 'owner', 'team'].map(field => (
-                                    <td key={field} className="px-6 py-4 whitespace-nowrap">
+                                    <td key={field} className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
                                         <span className="no-print">
                                         {editingProject === project.project_name && (userRole === 'admin' || userRole === 'superadmin') ? (
-                                            // --- FIX: Conditional rendering for the Environment field ---
                                             field === 'environment' ? (
                                                 <select
                                                     value={projectMeta[project.project_name]?.[field] || ''}
@@ -375,7 +374,7 @@ const ProjectsView = () => {
                                                         ...meta,
                                                         [project.project_name]: { ...meta[project.project_name], [field]: e.target.value }
                                                     }))}
-                                                    className="p-1 border border-gray-300 rounded w-full text-base"
+                                                    className="p-1 border border-gray-300 dark:border-gray-600 rounded w-full text-base bg-white dark:bg-gray-700"
                                                 >
                                                     <option value="">Select...</option>
                                                     <option value="Production">Production</option>
@@ -391,7 +390,7 @@ const ProjectsView = () => {
                                                         [project.project_name]: { ...meta[project.project_name], [field]: e.target.value }
                                                     }))}
                                                     placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace('Code', ' Code')}
-                                                    className="p-1 border border-gray-300 rounded w-24 text-base"
+                                                    className="p-1 border border-gray-300 dark:border-gray-600 rounded w-24 text-base bg-white dark:bg-gray-700"
                                                 />
                                             )
                                         ) : (
@@ -401,7 +400,7 @@ const ProjectsView = () => {
                                         <span className="hidden print:inline text-base">{projectMeta[project.project_name]?.[field] || ''}</span>
                                     </td>
                                     ))}
-                                    <td className="px-6 py-4 whitespace-nowrap font-bold text-green-600 text-base text-right">
+                                    <td className="px-6 py-4 whitespace-nowrap font-bold text-green-600 dark:text-green-400 text-base text-right">
                                     {formatCurrency(project[`${selectedMonth}_cost`] || 0)}
                                     </td>
                                     {(userRole === 'admin' || userRole === 'superadmin') && (
@@ -434,9 +433,9 @@ const ProjectsView = () => {
                                 {(isPrinting || expandedProjects[project.project_name]) && (
                                     <tr>
                                     <td colSpan={(userRole === 'admin' || userRole === 'superadmin') ? 8 : 7}>
-                                        <div className="p-4 bg-slate-100 text-sm">
+                                        <div className="p-4 bg-slate-100 dark:bg-gray-900/70 text-sm">
                                         <div className="px-8">
-                                            <h4 className="font-semibold text-gray-700 mb-2 text-base">Service Breakdown:</h4>
+                                            <h4 className="font-semibold text-gray-700 dark:text-gray-200 mb-2 text-base">Service Breakdown:</h4>
                                             <ServiceBreakdownView
                                             services={project.service_breakdown}
                                             selectedMonth={selectedMonth}
@@ -449,9 +448,10 @@ const ProjectsView = () => {
                                 )}
                                 </React.Fragment>
                             ))}
-                            <tr className="bg-gray-100 font-bold">
-                                <td colSpan="6" className="px-6 py-4 text-right text-gray-800 text-lg">Grand Total</td>
-                                <td className="px-6 py-4 text-green-800 font-extrabold text-lg">{formatCurrency(grandTotalToDisplay)}</td>
+                            <tr className="bg-gray-100 dark:bg-gray-700 font-bold">
+                                <td colSpan="6" className="px-6 py-4 text-right text-gray-800 dark:text-gray-100 text-lg no-print">Grand Total</td>
+                                <td className="px-6 py-4 text-right text-gray-800 dark:text-gray-100 text-lg print:hidden">Grand Total</td>
+                                <td className="px-6 py-4 text-green-800 dark:text-green-300 font-extrabold text-lg">{formatCurrency(grandTotalToDisplay)}</td>
                                 {(userRole === 'admin' || userRole === 'superadmin') && <td className="no-print"></td>}
                             </tr>
                         </tbody>
@@ -461,29 +461,29 @@ const ProjectsView = () => {
 
             {isExportModalOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print">
-                <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-xl font-semibold">Select Projects to Export</h3>
-                        <button onClick={() => setIsExportModalOpen(false)}><X size={24}/></button>
+                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Select Projects to Export</h3>
+                        <button onClick={() => setIsExportModalOpen(false)} className="text-gray-500 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white"><X size={24}/></button>
                     </div>
                     <div className="flex items-center gap-4 mb-4">
-                        <span className="font-semibold">Export by:</span>
-                        <div className="flex justify-center bg-gray-100 p-1 rounded-lg">
-                            <button onClick={() => {setExportBy('projectName'); setSelectedForExport([]); setExportSearchTerm('');}} className={`px-3 py-1 text-sm font-semibold rounded-md ${exportBy === 'projectName' ? 'bg-white shadow' : 'text-gray-600'}`}>Project Name</button>
-                            <button onClick={() => {setExportBy('projectCode'); setSelectedForExport([]); setExportSearchTerm('');}} className={`px-3 py-1 text-sm font-semibold rounded-md ${exportBy === 'projectCode' ? 'bg-white shadow' : 'text-gray-600'}`}>Project Code</button>
+                        <span className="font-semibold text-gray-700 dark:text-gray-300">Export by:</span>
+                        <div className="flex justify-center bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+                            <button onClick={() => {setExportBy('projectName'); setSelectedForExport([]); setExportSearchTerm('');}} className={`px-3 py-1 text-sm font-semibold rounded-md ${exportBy === 'projectName' ? 'bg-white dark:bg-gray-600 shadow' : 'text-gray-600 dark:text-gray-300'}`}>Project Name</button>
+                            <button onClick={() => {setExportBy('projectCode'); setSelectedForExport([]); setExportSearchTerm('');}} className={`px-3 py-1 text-sm font-semibold rounded-md ${exportBy === 'projectCode' ? 'bg-white dark:bg-gray-600 shadow' : 'text-gray-600 dark:text-gray-300'}`}>Project Code</button>
                         </div>
                     </div>
-                    <div className="border rounded-lg p-2 mb-4">
+                    <div className="border dark:border-gray-600 rounded-lg p-2 mb-4">
                         <input
                             type="text"
                             value={exportSearchTerm}
                             onChange={(e) => setExportSearchTerm(e.target.value)}
                             placeholder={`Search by ${exportBy === 'projectName' ? 'name' : 'code'}...`}
-                            className="p-2 border-b border-gray-300 w-full mb-2"
+                            className="p-2 border-b border-gray-300 dark:border-gray-600 w-full mb-2 bg-transparent text-gray-900 dark:text-gray-200"
                         />
                         <div className="max-h-48 overflow-y-auto">
                             {exportableItems.length > 0 && (
-                                <label className="flex items-center p-2 hover:bg-gray-100 rounded-md font-bold border-b sticky top-0 bg-white cursor-pointer">
+                                <label className="flex items-center p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md font-bold border-b dark:border-gray-600 sticky top-0 bg-white dark:bg-gray-800 cursor-pointer text-gray-800 dark:text-gray-100">
                                     <input 
                                         type="checkbox"
                                         ref={selectAllRef}
@@ -494,7 +494,7 @@ const ProjectsView = () => {
                                 </label>
                             )}
                             {exportableItems.map(item => (
-                                <label key={item} className="flex items-center p-2 hover:bg-gray-100 rounded-md cursor-pointer">
+                                <label key={item} className="flex items-center p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md cursor-pointer text-gray-700 dark:text-gray-300">
                                     <input type="checkbox" checked={selectedForExport.includes(item)} onChange={() => handleExportSelection(item)} className="mr-3 h-4 w-4"/>
                                     {item}
                                 </label>
@@ -502,7 +502,7 @@ const ProjectsView = () => {
                         </div>
                     </div>
                     <div className="flex justify-end gap-4">
-                        <button onClick={() => setIsExportModalOpen(false)} className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Cancel</button>
+                        <button onClick={() => setIsExportModalOpen(false)} className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500">Cancel</button>
                         <button onClick={handleExportCSV} className="bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700">Export CSV</button>
                         <button onClick={handleExportPDF} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700">Export PDF</button>
                     </div>
@@ -513,4 +513,3 @@ const ProjectsView = () => {
     );
 };
 export default ProjectsView;
-

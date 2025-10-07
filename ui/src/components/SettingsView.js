@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useMemo, useCallback } from 'react';
 import { GlobalStateContext } from '../context/GlobalStateContext';
-import { UserPlus, Trash2, Edit, Eye, EyeOff, CheckCircle, AlertCircle, Search } from 'lucide-react';
+import { UserPlus, Trash2, Edit, Eye, EyeOff, CheckCircle, AlertCircle, Search, Users, FileCog, Palette, Sun, Moon, Laptop } from 'lucide-react';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -10,8 +10,8 @@ const Notification = ({ message, type }) => {
 
     const baseClasses = 'fixed top-5 right-5 p-4 rounded-lg shadow-lg flex items-center gap-3 transition-opacity duration-300 z-50';
     const typeClasses = {
-        success: 'bg-green-100 text-green-800',
-        error: 'bg-red-100 text-red-800',
+        success: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
+        error: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
     };
     const Icon = type === 'success' ? CheckCircle : AlertCircle;
 
@@ -23,14 +23,14 @@ const Notification = ({ message, type }) => {
     );
 };
 
-
-const SettingsView = () => {
+// ## 1. User Management Page ##
+export const UsersView = () => {
     const { token, userRole: currentUserRole } = useContext(GlobalStateContext);
     
     const [users, setUsers] = useState([]);
     const [projects, setProjects] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' });
+    const [newUser, setNewUser] = useState({ username: '', email: '', password: '', role: 'user' });
     
     const [notification, setNotification] = useState({ message: '', type: '' });
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -106,8 +106,8 @@ const SettingsView = () => {
 
     const handleCreateUser = async (e) => {
         e.preventDefault();
-        if (!newUser.username || !newUser.password) {
-            setNotification({ message: 'Username and password are required.', type: 'error' });
+        if (!newUser.username || !newUser.password || !newUser.email) {
+            setNotification({ message: 'Username, email, and password are required.', type: 'error' });
             return;
         }
         try {
@@ -119,7 +119,7 @@ const SettingsView = () => {
             const result = await response.json();
             if (response.ok) {
                 setNotification({ message: 'User created successfully!', type: 'success' });
-                setNewUser({ username: '', password: '', role: 'user' });
+                setNewUser({ username: '', email: '', password: '', role: 'user' });
                 fetchUsers();
             } else {
                 setNotification({ message: result.error || 'Failed to create user.', type: 'error' });
@@ -168,6 +168,7 @@ const SettingsView = () => {
         e.preventDefault();
         if (!editingUser) return;
         const payload = { 
+            email: editingUser.email,
             role: editingUser.role,
             assigned_project_ids: editingUser.role === 'user' ? (editingUser.assigned_projects || []).map(p => p.id) : []
         };
@@ -182,9 +183,7 @@ const SettingsView = () => {
             if (response.ok) {
                 setNotification({ message: 'User updated successfully!', type: 'success' });
                 setIsEditModalOpen(false);
-                // --- FIX: Re-fetch both users and projects to get the latest assignment data ---
-                await Promise.all([fetchUsers(), fetchProjects()]);
-                // --- END FIX ---
+                await fetchUsers();
             } else {
                 const result = await response.json();
                 setNotification({ message: result.error || 'Failed to update user.', type: 'error' });
@@ -202,104 +201,115 @@ const SettingsView = () => {
         );
     }, [projects, projectSearchTerm]);
 
-    if (isLoading) return <div className="text-center p-10 font-semibold text-gray-500">Loading Settings...</div>;
+    if (isLoading) return <div className="text-center p-10 font-semibold text-gray-500 dark:text-gray-400">Loading User Data...</div>;
 
     return (
         <div className="space-y-6 printable-content">
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 flex items-center"><Users className="mr-3 text-gray-700 dark:text-gray-300" />User Management</h1>
             <Notification message={notification.message} type={notification.type} />
 
-            <div className="bg-white p-6 rounded-xl shadow-lg">
-                <h3 className="text-2xl font-semibold text-gray-800 mb-4 flex items-center"><UserPlus className="mr-2" />Add New User</h3>
-                <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
+                <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4 flex items-center"><UserPlus className="mr-2" />Add New User</h3>
+                <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Username</label>
-                        <input type="text" name="username" value={newUser.username} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" autoComplete="username"/>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Username</label>
+                        <input type="text" name="username" value={newUser.username} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-200" autoComplete="username"/>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email Address</label>
+                        <input type="email" name="email" value={newUser.email} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-200" autoComplete="email"/>
                     </div>
                     <div className="relative">
-                        <label className="block text-sm font-medium text-gray-700">Password</label>
-                        <input type={showNewPassword ? 'text' : 'password'} name="password" value={newUser.password} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" autoComplete="new-password"/>
-                        <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute inset-y-0 right-0 top-6 pr-3 flex items-center text-gray-500">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+                        <input type={showNewPassword ? 'text' : 'password'} name="password" value={newUser.password} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-200" autoComplete="new-password"/>
+                        <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute inset-y-0 right-0 top-6 pr-3 flex items-center text-gray-500 dark:text-gray-400">
                            {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                         </button>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Role</label>
-                        <select name="role" value={newUser.role} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Role</label>
+                        <select name="role" value={newUser.role} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-200">
                             <option value="user">User</option>
                             <option value="admin">Admin</option>
                             {currentUserRole === 'superadmin' && <option value="superadmin">SuperAdmin</option>}
                         </select>
                     </div>
-                    <button type="submit" className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700">Create User</button>
+                    <button type="submit" className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800">Create User</button>
                 </form>
             </div>
 
-            <div className="bg-white p-6 rounded-xl shadow-lg">
-                <h3 className="text-2xl font-semibold text-gray-800 mb-4">Manage Users</h3>
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
+                <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Manage Existing Users</h3>
                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-700/50">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned Projects</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Username</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Email</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Role</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Assigned Projects</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {users.length === 0 ? (
-                                <tr><td colSpan="4" className="px-6 py-10 text-center text-gray-500">No users found. Add a new user above.</td></tr>
-                            ) : (
-                                users.map(user => (
-                                    <tr key={user.id}>
-                                        <td className="px-6 py-4 whitespace-nowrap">{user.username}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap">{user.role}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.assigned_projects?.length || 0}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <button onClick={() => openEditModal(user)} className="text-indigo-600 hover:text-indigo-900 disabled:text-gray-400 disabled:cursor-not-allowed" disabled={currentUserRole === 'admin' && user.role === 'superadmin'}><Edit size={18} /></button>
-                                            <button onClick={() => openDeleteModal(user)} className="text-red-600 hover:text-red-900 ml-4 disabled:text-gray-400 disabled:cursor-not-allowed" disabled={currentUserRole === 'admin' && user.role === 'superadmin'}><Trash2 size={18} /></button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            {users.map(user => (
+                                <tr key={user.id} className="dark:text-gray-200">
+                                    <td className="px-6 py-4 whitespace-nowrap">{user.username}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">{user.email}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">{user.role}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{user.assigned_projects?.length || 0}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <button onClick={() => openEditModal(user)} className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 disabled:text-gray-400 disabled:cursor-not-allowed" disabled={currentUserRole === 'admin' && user.role === 'superadmin'}><Edit size={18} /></button>
+                                        <button onClick={() => openDeleteModal(user)} className="text-red-600 hover:text-red-900 ml-4 dark:text-red-400 dark:hover:text-red-300 disabled:text-gray-400 disabled:cursor-not-allowed" disabled={currentUserRole === 'admin' && user.role === 'superadmin'}><Trash2 size={18} /></button>
+                                    </td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 </div>
             </div>
 
             {isEditModalOpen && editingUser && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
-                        <h3 className="text-xl font-semibold mb-4">Edit User: {editingUser.username}</h3>
+                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md">
+                        <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Edit User: {editingUser.username}</h3>
                         <form onSubmit={handleUpdateUser} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Role</label>
-                                <select value={editingUser.role} onChange={(e) => setEditingUser({...editingUser, role: e.target.value})} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" disabled={currentUserRole === 'admin' && editingUser.role === 'superadmin'}>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email Address</label>
+                                <input 
+                                    type="email" 
+                                    value={editingUser.email || ''} 
+                                    onChange={(e) => setEditingUser({...editingUser, email: e.target.value})} 
+                                    className="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-200"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Role</label>
+                                <select value={editingUser.role} onChange={(e) => setEditingUser({...editingUser, role: e.target.value})} className="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-200" disabled={currentUserRole === 'admin' && editingUser.role === 'superadmin'}>
                                     <option value="user">User</option>
                                     <option value="admin">Admin</option>
                                     {currentUserRole === 'superadmin' && <option value="superadmin">SuperAdmin</option>}
                                 </select>
                             </div>
                             <div className="relative">
-                                <label className="block text-sm font-medium text-gray-700">New Password (optional)</label>
-                                <input type={showEditPassword ? 'text' : 'password'} value={editPassword} onChange={(e) => setEditPassword(e.target.value)} placeholder="Leave blank to keep unchanged" className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" autoComplete="new-password"/>
-                                <button type="button" onClick={() => setShowEditPassword(!showEditPassword)} className="absolute inset-y-0 right-0 top-6 pr-3 flex items-center text-gray-500">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">New Password (optional)</label>
+                                <input type={showEditPassword ? 'text' : 'password'} value={editPassword} onChange={(e) => setEditPassword(e.target.value)} placeholder="Leave blank to keep unchanged" className="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-200" autoComplete="new-password"/>
+                                <button type="button" onClick={() => setShowEditPassword(!showEditPassword)} className="absolute inset-y-0 right-0 top-6 pr-3 flex items-center text-gray-500 dark:text-gray-400">
                                    {showEditPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                 </button>
                             </div>
-                            
                             {editingUser.role === 'user' && (
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Assign Projects</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Assign Projects</label>
                                     <div className="relative">
                                         <Search size={16} className="absolute left-3 top-3 text-gray-400" />
-                                        <input type="text" placeholder="Search projects..." value={projectSearchTerm} onChange={e => setProjectSearchTerm(e.target.value)} className="w-full pl-10 p-2 border border-gray-300 rounded-md"/>
+                                        <input type="text" placeholder="Search projects..." value={projectSearchTerm} onChange={e => setProjectSearchTerm(e.target.value)} className="w-full pl-10 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200"/>
                                     </div>
-                                    <div className="mt-2 border rounded-md max-h-48 overflow-y-auto">
+                                    <div className="mt-2 border dark:border-gray-600 rounded-md max-h-48 overflow-y-auto">
                                         {filteredProjects.map(project => {
                                             const isAssigned = (editingUser.assigned_projects || []).some(p => p.id === project.id);
                                             return (
-                                                <label key={project.id} className="flex items-center p-3 hover:bg-gray-50 cursor-pointer">
+                                                <label key={project.id} className="flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
                                                     <input
                                                         type="checkbox"
                                                         checked={isAssigned}
@@ -312,8 +322,8 @@ const SettingsView = () => {
                                                         }}
                                                         className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                                     />
-                                                    <span className="ml-3 text-sm text-gray-700">
-                                                        {project.name} <span className="text-xs text-gray-500">({project.code})</span>
+                                                    <span className="ml-3 text-sm text-gray-700 dark:text-gray-300">
+                                                        {project.name} <span className="text-xs text-gray-500 dark:text-gray-400">({project.code})</span>
                                                     </span>
                                                 </label>
                                             );
@@ -323,21 +333,21 @@ const SettingsView = () => {
                             )}
 
                             <div className="flex justify-end gap-4 pt-4">
-                                <button type="button" onClick={() => setIsEditModalOpen(false)} className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Cancel</button>
+                                <button type="button" onClick={() => setIsEditModalOpen(false)} className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500">Cancel</button>
                                 <button type="submit" className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700">Save Changes</button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
-
+            
             {isDeleteModalOpen && userToDelete && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
-                        <h3 className="text-xl font-semibold mb-2">Delete User</h3>
-                        <p className="text-gray-600 mb-6">Are you sure you want to delete the user <span className="font-bold">{userToDelete.username}</span>? This action cannot be undone.</p>
+                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md">
+                        <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">Delete User</h3>
+                        <p className="text-gray-600 dark:text-gray-300 mb-6">Are you sure you want to delete the user <span className="font-bold">{userToDelete.username}</span>? This action cannot be undone.</p>
                         <div className="flex justify-end gap-4">
-                            <button type="button" onClick={() => setIsDeleteModalOpen(false)} className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Cancel</button>
+                            <button type="button" onClick={() => setIsDeleteModalOpen(false)} className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500">Cancel</button>
                             <button type="button" onClick={handleDeleteUser} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700">Delete User</button>
                         </div>
                     </div>
@@ -347,5 +357,77 @@ const SettingsView = () => {
     );
 };
 
-export default SettingsView;
 
+// ## 2. Business Rules Page ##
+export const BusinessRulesView = () => (
+    <div className="space-y-6">
+        <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 flex items-center"><FileCog className="mr-3 text-gray-700 dark:text-gray-300" />Business Rules</h1>
+        <div className="bg-white dark:bg-gray-800 p-12 rounded-xl shadow-lg text-center">
+            <FileCog size={50} className="mx-auto text-blue-500 mb-4" />
+            <h2 className="text-2xl font-semibold text-gray-700 dark:text-gray-200">Coming Soon</h2>
+            <p className="text-gray-500 dark:text-gray-400 mt-2">This section for configuring business rules and application logic is under development.</p>
+        </div>
+    </div>
+);
+
+
+// ## 3. Customize View Page ##
+export const CustomizeView = () => {
+    const { theme, setTheme } = useContext(GlobalStateContext);
+
+    const handleAccentChange = (colorClass) => {
+        const root = document.documentElement;
+        root.classList.forEach(className => {
+            if (className.startsWith('theme-')) {
+                root.classList.remove(className);
+            }
+        });
+        root.classList.add(colorClass);
+    };
+
+    const ThemeButton = ({ mode, text, icon: Icon }) => (
+        <button
+            onClick={() => setTheme(mode)}
+            className={`flex flex-col items-center justify-center w-full p-6 border-2 rounded-lg transition-all duration-200 ${
+                theme === mode 
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/50 shadow-md' 
+                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+        >
+            <Icon size={28} className="mb-2 text-gray-600 dark:text-gray-300" />
+            <span className="font-semibold text-gray-700 dark:text-gray-200">{text}</span>
+        </button>
+    );
+
+    return (
+        <div className="space-y-8">
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 flex items-center">
+                <Palette className="mr-3 text-gray-700 dark:text-gray-300" />Customize Appearance
+            </h1>
+
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Theme</h2>
+                <p className="text-gray-500 dark:text-gray-400 mb-6">Choose how the application looks. "System" will match your current OS setting.</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <ThemeButton mode="light" text="Light" icon={Sun} />
+                    <ThemeButton mode="dark" text="Dark" icon={Moon} />
+                    <ThemeButton mode="system" text="System" icon={Laptop} />
+                </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Accent Color</h2>
+                <p className="text-gray-500 dark:text-gray-400 mb-6">Select a primary color for buttons, links, and active elements.</p>
+                <div className="flex items-center gap-4">
+                    <button onClick={() => handleAccentChange('theme-blue')} className="h-10 w-10 rounded-full bg-blue-600 ring-2 ring-offset-2 dark:ring-offset-gray-800 ring-blue-600 focus:outline-none focus:ring-4"></button>
+                    <button onClick={() => handleAccentChange('theme-indigo')} className="h-10 w-10 rounded-full bg-indigo-600 hover:ring-2 ring-offset-2 dark:ring-offset-gray-800 ring-indigo-600 focus:outline-none focus:ring-4"></button>
+                    <button onClick={() => handleAccentChange('theme-emerald')} className="h-10 w-10 rounded-full bg-emerald-600 hover:ring-2 ring-offset-2 dark:ring-offset-gray-800 ring-emerald-600 focus:outline-none focus:ring-4"></button>
+                    <button onClick={() => handleAccentChange('theme-rose')} className="h-10 w-10 rounded-full bg-rose-600 hover:ring-2 ring-offset-2 dark:ring-offset-gray-800 ring-rose-600 focus:outline-none focus:ring-4"></button>
+                </div>
+                 <p className="text-xs text-gray-400 mt-4">Note: This is a simplified demo. A full implementation would use CSS variables.</p>
+            </div>
+        </div>
+    );
+};
+
+export default UsersView;

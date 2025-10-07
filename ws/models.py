@@ -14,6 +14,8 @@ class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
+    # 🔹 ADDED: Email column for the User model
+    email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='user')
     
@@ -62,7 +64,6 @@ class Budget(db.Model):
     month = db.Column(db.String(10), nullable=False)
     amount = db.Column(db.Numeric(12, 2), nullable=False)
 
-# --- ADDED: ExchangeRate Model ---
 class ExchangeRate(db.Model):
     __tablename__ = 'exchange_rates'
     id = db.Column(db.Integer, primary_key=True)
@@ -71,3 +72,15 @@ class ExchangeRate(db.Model):
     rate = db.Column(db.Numeric(10, 4), nullable=False)
     last_updated = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow)
 
+class Anomaly(db.Model):
+    __tablename__ = 'anomalies'
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    billing_year = db.Column(db.Integer, nullable=False)
+    billing_month = db.Column(db.String(10), nullable=False)
+    anomalous_cost = db.Column(db.Numeric(12, 2), nullable=False)
+    average_cost = db.Column(db.Numeric(12, 2), nullable=False)
+    is_acknowledged = db.Column(db.Boolean, default=False, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    project = db.relationship('Project')

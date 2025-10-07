@@ -12,3 +12,4 @@ gunicorn
 requests
 pytest
 bcrypt
+scikit-learn

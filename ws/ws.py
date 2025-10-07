@@ -8,8 +8,11 @@ from routes.users import users_bp
 from routes.billing import billing_bp
 from routes.projects import projects_bp
 from routes.pricing import pricing_bp
-# --- ADDED: Import the new budgets blueprint ---
 from routes.budgets import budgets_bp
+from routes.forecasting import forecasting_bp
+# 🔹 ADDED: Import the new anomalies blueprint
+from routes.anomalies import anomalies_bp
+
 
 app = Flask(__name__)
 
@@ -27,8 +30,11 @@ app.register_blueprint(users_bp)
 app.register_blueprint(billing_bp)
 app.register_blueprint(projects_bp)
 app.register_blueprint(pricing_bp)
-# --- ADDED: Register the new budgets blueprint ---
 app.register_blueprint(budgets_bp)
+app.register_blueprint(forecasting_bp)
+# 🔹 ADDED: Register the new anomalies blueprint
+app.register_blueprint(anomalies_bp)
+
 
 if __name__ == "__main__":
     with app.app_context():

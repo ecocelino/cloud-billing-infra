@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from models import db, Billing, Project
 from services.auth_service import token_required, role_required
 from services.billing_service import process_billing_data
@@ -18,7 +18,6 @@ def get_billing_services(current_user):
     if not year_str:
         return jsonify({"error": "Year is a required parameter"}), 400
     
-    # --- FIX: Fetch data for the selected year AND the previous year ---
     try:
         current_year = int(year_str)
         previous_year = current_year - 1
@@ -33,9 +32,7 @@ def get_billing_services(current_user):
     if platform:
         query = query.filter(Billing.platform == platform)
     
-    # Updated query to fetch both years
     query = query.filter(Billing.billing_year.in_(years_to_fetch))
-    # --- END FIX ---
 
     services = query.all()
 
@@ -73,7 +70,6 @@ def get_billing_services(current_user):
 @token_required
 @role_required(roles=["admin", "superadmin"])
 def upload_csv(current_user):
-    # This function remains unchanged
     file = request.files.get("file")
     platform = request.form.get("platform")
     selected_month = request.form.get("month")
@@ -151,5 +147,6 @@ def upload_csv(current_user):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
+        # 🔹 UPDATED: Log the specific error for debugging and return a generic message
+        current_app.logger.error(f"CSV Upload failed: {e}")
+        return jsonify({"error": "An internal error occurred during file processing."}), 500

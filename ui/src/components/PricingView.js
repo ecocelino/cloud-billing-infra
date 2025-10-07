@@ -7,18 +7,29 @@ import autoTable from 'jspdf-autotable';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
-const ReadOnlyField = ({ value, className = '' }) => (<span className={`text-gray-800 ${className}`}>{value}</span>);
+const ReadOnlyField = ({ value, className = '' }) => (
+    <span className={`text-gray-800 dark:text-gray-100 ${className}`}>{value}</span>
+);
 
 const EditableField = ({ initialValue, onDebouncedChange, type = 'text', className = '' }) => {
     const [value, setValue] = useState(initialValue);
     useEffect(() => { setValue(initialValue); }, [initialValue]);
+
     useEffect(() => {
         const handler = setTimeout(() => {
             if (value !== initialValue) { onDebouncedChange(value); }
         }, 400);
         return () => { clearTimeout(handler); };
     }, [value, initialValue, onDebouncedChange]);
-    return ( <input type={type} value={value} onChange={(e) => setValue(e.target.value)} className={`w-full bg-transparent border-b-2 border-transparent focus:outline-none focus:border-blue-500 transition-all p-1 -m-1 rounded-md ${className}`} /> );
+
+    return (
+        <input 
+            type={type} 
+            value={value} 
+            onChange={(e) => setValue(e.target.value)} 
+            className={`w-full bg-transparent border-b-2 border-transparent focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 transition-all p-1 -m-1 rounded-md text-gray-800 dark:text-gray-100 ${className}`} 
+        />
+    );
 };
 
 const PricingCard = ({ tier, onTierChange, onRemoveService, onAddService, exchangeRateInfo, isEditable }) => {
@@ -41,11 +52,11 @@ const PricingCard = ({ tier, onTierChange, onRemoveService, onAddService, exchan
     const monthlyTotalPHP = monthlyTotalUSD * (exchangeRateInfo?.rate || 0);
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-lg flex flex-col h-full border border-gray-200 printable-content">
-            <h3 className="text-2xl font-bold text-gray-800 mb-4">{tier.title}</h3>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg flex flex-col h-full border border-gray-200 dark:border-gray-700 printable-content">
+            <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">{tier.title}</h3>
             <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left text-gray-600">
-                    <thead className="text-xs text-gray-700 uppercase bg-gray-50 rounded-t-lg">
+                <table className="w-full text-sm text-left text-gray-600 dark:text-gray-300">
+                    <thead className="text-xs text-gray-700 dark:text-gray-200 uppercase bg-gray-50 dark:bg-gray-700/50 rounded-t-lg">
                         <tr>
                             <th scope="col" className="px-4 py-3">Service</th>
                             <th scope="col" className="px-4 py-3">Instance</th>
@@ -56,35 +67,35 @@ const PricingCard = ({ tier, onTierChange, onRemoveService, onAddService, exchan
                     </thead>
                     <tbody>
                         {tier.services.map((service, index) => (
-                            <tr key={index} className="border-b hover:bg-gray-50">
-                                <td className="px-4 py-3 font-medium text-gray-900">
+                            <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
                                     {isEditable ? <EditableField initialValue={service.service_name} onDebouncedChange={(v) => handleServiceChange(index, 'service_name', v)} /> : <ReadOnlyField value={service.service_name} />}
                                 </td>
                                 <td className="px-4 py-3">{isEditable ? <EditableField initialValue={service.instance} onDebouncedChange={(v) => handleServiceChange(index, 'instance', v)} /> : <ReadOnlyField value={service.instance} />}</td>
                                 <td className="px-4 py-3">
-                                    <div className="flex items-center gap-2"><Cpu size={14} className="text-gray-500 flex-shrink-0"/>{isEditable ? <EditableField initialValue={service.specs_vcpu || ''} onDebouncedChange={(v) => handleServiceChange(index, 'specs_vcpu', v)} /> : <ReadOnlyField value={service.specs_vcpu} />}</div>
-                                    <div className="flex items-center gap-2"><Server size={14} className="text-gray-500 flex-shrink-0"/>{isEditable ? <EditableField initialValue={service.specs_memory || ''} onDebouncedChange={(v) => handleServiceChange(index, 'specs_memory', v)} /> : <ReadOnlyField value={service.specs_memory} />}</div>
-                                    <div className="flex items-center gap-2"><Database size={14} className="text-gray-500 flex-shrink-0"/>{isEditable ? <EditableField initialValue={service.storage || ''} onDebouncedChange={(v) => handleServiceChange(index, 'storage', v)} /> : <ReadOnlyField value={service.storage} />}</div>
+                                    <div className="flex items-center gap-2"><Cpu size={14} className="text-gray-500 dark:text-gray-400 flex-shrink-0"/>{isEditable ? <EditableField initialValue={service.specs_vcpu || ''} onDebouncedChange={(v) => handleServiceChange(index, 'specs_vcpu', v)} /> : <ReadOnlyField value={service.specs_vcpu} />}</div>
+                                    <div className="flex items-center gap-2"><Server size={14} className="text-gray-500 dark:text-gray-400 flex-shrink-0"/>{isEditable ? <EditableField initialValue={service.specs_memory || ''} onDebouncedChange={(v) => handleServiceChange(index, 'specs_memory', v)} /> : <ReadOnlyField value={service.specs_memory} />}</div>
+                                    <div className="flex items-center gap-2"><Database size={14} className="text-gray-500 dark:text-gray-400 flex-shrink-0"/>{isEditable ? <EditableField initialValue={service.storage || ''} onDebouncedChange={(v) => handleServiceChange(index, 'storage', v)} /> : <ReadOnlyField value={service.storage} />}</div>
                                 </td>
                                 <td className="px-4 py-3 text-right font-semibold">
                                     <div className="flex items-center justify-end"><span>$</span>{isEditable ? <EditableField type="number" initialValue={service.price} onDebouncedChange={(v) => handleServiceChange(index, 'price', v)} className="text-right" /> : <ReadOnlyField value={parseFloat(service.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} className="text-right w-full" />}</div>
                                 </td>
-                                {isEditable && (<td className="px-4 py-3 text-center"><button onClick={() => onRemoveService(index)} className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100 transition-colors"><Trash2 size={18} /></button></td>)}
+                                {isEditable && (<td className="px-4 py-3 text-center"><button onClick={() => onRemoveService(index)} className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 p-1 rounded-full hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"><Trash2 size={18} /></button></td>)}
                             </tr>
                         ))}
                     </tbody>
                     <tfoot>
-                        {isEditable && (<tr><td colSpan="5" className="px-4 py-2"><button onClick={onAddService} className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-semibold py-1 px-2 rounded-md hover:bg-blue-50 transition-colors"><PlusCircle size={16} /> Add Service</button></td></tr>)}
-                        <tr className="font-bold text-gray-800 bg-gray-100">
+                        {isEditable && (<tr><td colSpan="5" className="px-4 py-2"><button onClick={onAddService} className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-semibold py-1 px-2 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/40 transition-colors"><PlusCircle size={16} /> Add Service</button></td></tr>)}
+                        <tr className="font-bold text-gray-800 dark:text-gray-100 bg-gray-100 dark:bg-gray-700">
                             <td colSpan={3} className="px-4 py-3 text-right text-lg">Monthly Total (USD)</td>
                             <td className="px-4 py-3 text-right text-lg">${monthlyTotalUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             {isEditable && <td></td>}
                         </tr>
-                        <tr className="font-semibold text-gray-600 bg-gray-50">
+                        <tr className="font-semibold text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/50">
                             <td colSpan={3} className="px-4 py-3 text-right">
                                 <div>Monthly Total (PHP)</div>
                                 {exchangeRateInfo ? (
-                                    <div className="text-xs font-normal text-gray-500">Rate: ₱{exchangeRateInfo.rate.toFixed(4)} as of {exchangeRateInfo.last_updated}</div>
+                                    <div className="text-xs font-normal text-gray-500 dark:text-gray-400">Rate: ₱{exchangeRateInfo.rate.toFixed(4)} as of {exchangeRateInfo.last_updated}</div>
                                 ) : (
                                     <div className="text-xs font-normal text-red-500">Rate not available</div>
                                 )}
@@ -97,7 +108,7 @@ const PricingCard = ({ tier, onTierChange, onRemoveService, onAddService, exchan
                     </tfoot>
                 </table>
             </div>
-            <div className="mt-4 pt-4 border-t border-gray-200 text-center text-xs text-gray-500 italic">
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-center text-xs text-gray-500 dark:text-gray-400 italic">
                 *Note: Pricing is based on the Google Cloud Pricing Calculator and is an estimate. Actual costs may vary.
             </div>
         </div>
@@ -328,8 +339,8 @@ const PricingView = () => {
         [pricingData, originalData]
     );
 
-    if (isLoading) return <div className="text-center p-10 font-semibold text-gray-500">Loading Pricing Data...</div>;
-    if (error) return <div className="text-center p-10 font-semibold text-red-500 bg-red-100 rounded-lg">{error}</div>;
+    if (isLoading) return <div className="text-center p-10 font-semibold text-gray-500 dark:text-gray-400">Loading Pricing Data...</div>;
+    if (error) return <div className="text-center p-10 font-semibold text-red-500 bg-red-100 dark:bg-red-900/50 dark:text-red-400 rounded-lg">{error}</div>;
 
     const renderTier = (tierKey) => (
         <PricingCard
@@ -347,45 +358,45 @@ const PricingView = () => {
         <div className="space-y-6 printable-content">
             <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 no-print">
                 <div>
-                    <h2 className="text-3xl font-bold text-gray-900 tracking-tight">GCP Infrastructure Pricing</h2>
-                    <p className="mt-1 text-gray-600">Details for the selected pricing tier.</p>
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">GCP Infrastructure Pricing</h2>
+                    <p className="mt-1 text-gray-600 dark:text-gray-400">Details for the selected pricing tier.</p>
                 </div>
                  <div className="flex items-start flex-wrap gap-4">
                     {isEditable && (
-                        <div className="flex flex-col gap-2 p-3 border rounded-lg bg-gray-50">
+                        <div className="flex flex-col gap-2 p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800">
                             <div className="flex items-center gap-2">
-                                <button onClick={handleUpdateRate} disabled={isUpdatingRate} className="flex items-center justify-center gap-2 bg-teal-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-teal-600 transition-all disabled:bg-gray-400">
+                                <button onClick={handleUpdateRate} disabled={isUpdatingRate} className="flex items-center justify-center gap-2 bg-teal-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-teal-600 transition-all disabled:bg-gray-400 dark:disabled:bg-gray-600">
                                     {isUpdatingRate ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
                                     <span>Auto-Update Rate</span>
                                 </button>
                                 {updateStatus.type !== 'idle' && (
-                                    <span className={`text-sm ${updateStatus.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>{updateStatus.message}</span>
+                                    <span className={`text-sm ${updateStatus.type === 'success' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{updateStatus.message}</span>
                                 )}
                             </div>
-                            <div className="text-xs text-center text-gray-500">or</div>
+                            <div className="text-xs text-center text-gray-500 dark:text-gray-400">or</div>
                             <div className="flex items-center gap-2">
                                 <div className="relative">
-                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500">₱</span>
+                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">₱</span>
                                     <input
                                         type="number"
                                         value={manualRate}
                                         onChange={(e) => setManualRate(e.target.value)}
                                         placeholder="Manual Rate"
-                                        className="pl-6 pr-2 py-2 border rounded-lg w-36 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                        className="pl-6 pr-2 py-2 border dark:border-gray-600 rounded-lg w-36 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200"
                                         disabled={isSavingManualRate}
                                     />
                                 </div>
                                 <button
                                     onClick={handleManualRateSave}
                                     disabled={isSavingManualRate || !manualRate}
-                                    className="flex items-center justify-center gap-2 bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-700 transition-all disabled:bg-gray-400"
+                                    className="flex items-center justify-center gap-2 bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-700 transition-all disabled:bg-gray-400 dark:disabled:bg-gray-600"
                                 >
                                     {isSavingManualRate ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                                     <span>Save Rate</span>
                                 </button>
                             </div>
                             {manualRateStatus.type !== 'idle' && (
-                                <div className={`text-sm text-center mt-1 ${manualRateStatus.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>{manualRateStatus.message}</div>
+                                <div className={`text-sm text-center mt-1 ${manualRateStatus.type === 'success' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{manualRateStatus.message}</div>
                             )}
                         </div>
                     )}
@@ -393,23 +404,23 @@ const PricingView = () => {
                     <div className="flex-grow flex items-center justify-start md:justify-end gap-4">
                          {isEditable && (
                             <div className="flex items-center gap-x-4">
-                                <button onClick={handleSave} disabled={!hasChanges || isSaving} className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center">
+                                <button onClick={handleSave} disabled={!hasChanges || isSaving} className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-all disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center">
                                     {isSaving ? <><Loader2 size={20} className="animate-spin mr-2"/>Saving...</> : 'Save Changes'}
                                 </button>
                                 {hasChanges && !isSaving && (
-                                    <button onClick={handleCancel} className="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-300 transition-all">
+                                    <button onClick={handleCancel} className="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 transition-all">
                                         Cancel
                                     </button>
                                 )}
                                 {saveStatus.message && (
-                                    <div className={`flex items-center gap-2 p-2 rounded-md text-sm ${saveStatus.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                    <div className={`flex items-center gap-2 p-2 rounded-md text-sm ${saveStatus.type === 'success' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'}`}>
                                         {saveStatus.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
                                         {saveStatus.message}
                                     </div>
                                 )}
                             </div>
                          )}
-                        <button onClick={handleExportPDF} className="bg-gray-800 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-black transition-all flex items-center justify-center gap-2">
+                        <button onClick={handleExportPDF} className="bg-gray-800 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-black dark:bg-gray-200 dark:text-gray-900 dark:hover:bg-white transition-all flex items-center justify-center gap-2">
                            <Download size={18} />
                            <span>Export PDF</span>
                         </button>
@@ -421,7 +432,7 @@ const PricingView = () => {
                 {pricingData && activeTier && pricingData[activeTier] ? (
                     renderTier(activeTier)
                 ) : (
-                    <div className="text-center p-10 font-semibold text-gray-500 bg-white rounded-lg shadow-md">
+                    <div className="text-center p-10 font-semibold text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg shadow-md">
                         <p>Please select a pricing tier from the sidebar to view details.</p>
                     </div>
                 )}
