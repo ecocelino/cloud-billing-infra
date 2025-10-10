@@ -1,0 +1,16 @@
+Flask
+Flask-CORS
+flask_sqlalchemy
+Flask-Migrate
+mysql-connector-python
+pandas
+werkzeug
+PyJWT
+pymysql
+cryptography
+python-dotenv
+gunicorn
+requests
+pytest
+bcrypt
+scikit-learn

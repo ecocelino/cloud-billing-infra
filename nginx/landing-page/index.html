@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Cost Management Portal</title>
+    <style>
+        body { margin: 0; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #111827; }
+        .portal-container { text-align: center; }
+        h1 { font-size: 2.5rem; color: #f9fafb; margin-bottom: 2rem; }
+        .card-container { display: flex; gap: 2rem; }
+        .card { background-color: #1f2937; border: 1px solid #374151; border-radius: 12px; padding: 2.5rem 3rem; width: 250px; text-decoration: none; transition: all 0.2s ease; }
+        .card:hover { transform: translateY(-5px); border-color: #3b82f6; }
+        .card.disabled { cursor: not-allowed; opacity: 0.4; }
+        .card.disabled:hover { transform: none; border-color: #374151; }
+        .card-icon { font-size: 3rem; margin-bottom: 1rem; }
+        .card-title { font-size: 1.25rem; font-weight: 600; color: #e5e7eb; }
+        .card-subtitle { font-size: 0.875rem; color: #9ca3af; margin-top: 0.25rem; }
+    </style>
+</head>
+<body>
+    <div class="portal-container">
+        <h1>Cloud Cost Management Portal</h1>
+        <div class="card-container">
+            <a href="/gcp/" class="card">
+                <div class="card-icon">🔵</div>
+                <div class="card-title">GCP Cost System</div>
+                <div class="card-subtitle">Analyze Google Cloud Platform billing</div>
+            </a>
+            <a href="#" class="card disabled">
+                <div class="card-icon">🟠</div>
+                <div class="card-title">AWS Cost System</div>
+                <div class="card-subtitle">Coming Soon</div>
+            </a>
+        </div>
+    </div>
+</body>
+</html>

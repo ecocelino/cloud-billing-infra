@@ -1,16 +1,17 @@
+version: '3.8'
+
 services:
   mysql:
     image: mysql:8.0
     container_name: mysql_db
-    ports:
-      - "3306:3306"
+    # This line tells the container to load variables from your .env file
     env_file:
-      - ./.env
+      - ./gcp_app/.env
     volumes:
       - mysql_data:/var/lib/mysql
     restart: always
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -19,14 +20,14 @@ services:
 
   backend:
     build:
-      context: ./ws
+      context: ./gcp_app/ws
       dockerfile: docker/Dockerfile
     ports:
       - "5000:5000"
     volumes:
-      - ./ws:/app
+      - ./gcp_app/ws:/app
     env_file:
-      - ./.env
+      - ./gcp_app/.env
     depends_on:
       mysql:
         condition: service_healthy
@@ -37,15 +38,16 @@ services:
 
   frontend:
     build:
-      context: ./ui
+      context: ./gcp_app/ui
       dockerfile: docker/Dockerfile
     ports:
       - "3000:3000"
     volumes:
-      - ./ui:/app
+      - ./gcp_app/ui:/app
       - /app/node_modules
-    env_file:
-      - ./.env
+    # 🔹 UPDATED: The 'proxy' setting in package.json is better than env_file here
+    # env_file:
+    #   - ./gcp_app/.env
     depends_on:
       - backend
     restart: always
