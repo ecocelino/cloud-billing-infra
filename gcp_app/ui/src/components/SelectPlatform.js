@@ -4,7 +4,7 @@ import { GlobalStateContext } from '../context/GlobalStateContext';
 import { Cloud } from 'lucide-react';
 
 const SelectPlatform = () => {
-    const { setSelectedPlatform } = useContext(GlobalStateContext);
+    const { setSelectedPlatform, userPlatforms } = useContext(GlobalStateContext);
     const navigate = useNavigate();
 
     const handleSelect = (platform) => {
@@ -21,38 +21,40 @@ const SelectPlatform = () => {
             </div>
             <div className="flex flex-col md:flex-row gap-8">
                 {/* GCP Card */}
-                <div 
-                    onClick={() => handleSelect('GCP')} 
-                    className="bg-white dark:bg-gray-800 p-10 rounded-xl shadow-lg w-80 text-center cursor-pointer transition-transform transform hover:-translate-y-2 border dark:border-gray-700 flex flex-col items-center justify-between"
-                >
-                    {/* 🔹 UPDATED: Using an <img> tag to load the official logo */}
-                    <img 
-                        src="/images/gcp-logo.png" 
-                        alt="Google Cloud Platform Logo" 
-                        className="h-16 mb-4" 
-                    />
-                    <div>
-                        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">GCP</h2>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">Google Cloud Platform</p>
+                {userPlatforms.includes('GCP') && (
+                    <div 
+                        onClick={() => handleSelect('GCP')} 
+                        className="bg-white dark:bg-gray-800 p-10 rounded-xl shadow-lg w-80 text-center cursor-pointer transition-transform transform hover:-translate-y-2 border dark:border-gray-700 flex flex-col items-center justify-between"
+                    >
+                        <img 
+                            src="/images/gcp-logo.png" 
+                            alt="Google Cloud Platform Logo" 
+                            className="h-16 mb-4" 
+                        />
+                        <div>
+                            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">GCP</h2>
+                            <p className="text-gray-500 dark:text-gray-400 mt-1">Google Cloud Platform</p>
+                        </div>
                     </div>
-                </div>
+                )}
 
-                {/* AWS Card */}
-                <div 
-                    onClick={() => handleSelect('AWS')} 
-                    className="bg-white dark:bg-gray-800 p-10 rounded-xl shadow-lg w-80 text-center cursor-pointer transition-transform transform hover:-translate-y-2 border dark:border-gray-700 flex flex-col items-center justify-between"
-                >
-                    {/* 🔹 UPDATED: Using an <img> tag to load the official logo */}
-                    <img 
-                        src="/images/aws-logo.png" 
-                        alt="Amazon Web Services Logo" 
-                        className="h-16 mb-4 dark:invert"
-                    />
-                     <div>
-                        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">AWS</h2>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">Amazon Web Services</p>
+                {/* AWS Card - Now in "Coming Soon" state */}
+                {userPlatforms.includes('AWS') && (
+                    <div className="relative bg-white dark:bg-gray-800 p-10 rounded-xl shadow-lg w-80 text-center border dark:border-gray-700 flex flex-col items-center justify-between opacity-50 cursor-not-allowed">
+                        <div className="absolute top-4 right-4 bg-yellow-500 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full">
+                            Coming Soon
+                        </div>
+                        <img 
+                            src="/images/aws-logo.png" 
+                            alt="Amazon Web Services Logo" 
+                            className="h-16 mb-4 dark:invert"
+                        />
+                         <div>
+                            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">AWS</h2>
+                            <p className="text-gray-500 dark:text-gray-400 mt-1">Amazon Web Services</p>
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
         </div>
     );

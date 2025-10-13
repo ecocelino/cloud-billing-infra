@@ -11,7 +11,13 @@ users_bp = Blueprint("users", __name__)
 def setup_admin():
     if User.query.filter_by(username='admin').first():
         return jsonify({"message": "Admin user already exists."}), 200
-    admin_user = User(username='admin', role='superadmin', email='admin@example.com')
+    # The initial admin has access to both platforms by default
+    admin_user = User(
+        username='admin', 
+        role='superadmin', 
+        email='admin@example.com',
+        accessible_platforms=['GCP', 'AWS']
+    )
     admin_user.set_password('admin123')
     db.session.add(admin_user)
     db.session.commit()
@@ -27,27 +33,26 @@ def login():
     token = jwt.encode({
         'public_id': user.id,
         'role': user.role,
-        'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)
     }, 'b3baf4d212b79b3af923ce0151480584', algorithm="HS256")
-    return jsonify({"token": token, "role": user.role})
+    
+    return jsonify({
+        "token": token, 
+        "role": user.role,
+        "accessible_platforms": user.accessible_platforms or []
+    })
 
-# --- 👤 USER PROFILE ENDPOINT ---
-# 🔹 ADDED: New endpoint for users to update their own profile
 @users_bp.route('/api/profile', methods=['PUT'])
 @token_required
 def update_profile(current_user):
     data = request.get_json()
     
-    # Logic to update the user's email
     if 'email' in data and data['email'] != current_user.email:
-        # Check if the new email is already used by another user
         if User.query.filter(User.id != current_user.id, User.email == data['email']).first():
             return jsonify({'error': 'Email address already in use'}), 409
         current_user.email = data['email']
 
-    # Logic to update the user's password
     if 'new_password' in data and data['new_password']:
-        # Require current password to set a new one
         if 'current_password' not in data or not current_user.check_password(data['current_password']):
             return jsonify({'error': 'Your current password is incorrect'}), 401
         current_user.set_password(data['new_password'])
@@ -58,7 +63,6 @@ def update_profile(current_user):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
-# --- END USER PROFILE ENDPOINT ---
 
 
 @users_bp.route("/api/users", methods=["GET"])
@@ -73,6 +77,7 @@ def get_all_users(current_user):
             'username': user.username,
             'email': user.email,
             'role': user.role,
+            'accessible_platforms': user.accessible_platforms or [],
             'assigned_projects': [{'id': p.id, 'project_name': p.project_name} for p in user.assigned_projects]
         }
         output.append(user_data)
@@ -97,7 +102,8 @@ def create_user(current_user):
     new_user = User(
         username=data.get('username'), 
         email=data.get('email'),
-        role=data.get('role', 'user')
+        role=data.get('role', 'user'),
+        accessible_platforms=data.get('accessible_platforms', [])
     )
     new_user.set_password(data.get('password'))
     db.session.add(new_user)
@@ -128,6 +134,9 @@ def update_user(current_user, user_id):
 
     if 'password' in data and data['password']:
         user_to_update.set_password(data['password'])
+    
+    if 'accessible_platforms' in data:
+        user_to_update.accessible_platforms = data['accessible_platforms']
     
     if 'assigned_project_ids' in data and user_to_update.role == 'user':
         project_ids = data['assigned_project_ids']

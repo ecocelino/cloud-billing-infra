@@ -10,23 +10,27 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-const API_BASE_URL = process.env.REACT_APP_API_URL;
 const years = [2023, 2024, 2025, 2026, 2027];
 const colorPalette = ['#3b82f6', '#10b981', '#ef4444', '#f97316', '#8b5cf6', '#64748b', '#f59e0b', '#d946ef'];
 
 
 const GcpReportsView = () => {
-    const { token, selectedYear, setSelectedYear } = useContext(GlobalStateContext);
+    const { token, selectedYear, setSelectedYear, selectedPlatform } = useContext(GlobalStateContext);
     const [reportData, setReportData] = useState([]);
     const [groupBy, setGroupBy] = useState('team');
     const [isLoading, setIsLoading] = useState(true);
+    const [quarter, setQuarter] = useState('all');
 
     useEffect(() => {
         const fetchReportData = async () => {
-            if (!token) return;
+            if (!token || !selectedPlatform) return;
             setIsLoading(true);
             try {
-                const response = await fetch(`/api/reports/grouped_cost?groupBy=${groupBy}&year=${selectedYear}`, {
+                let url = `/api/reports/grouped_cost?groupBy=${groupBy}&year=${selectedYear}&platform=${selectedPlatform}`;
+                if (quarter !== 'all') {
+                    url += `&quarter=${quarter}`;
+                }
+                const response = await fetch(url, {
                     headers: { 'x-access-token': token }
                 });
                 if (response.ok) {
@@ -43,14 +47,17 @@ const GcpReportsView = () => {
             }
         };
         fetchReportData();
-    }, [token, selectedYear, groupBy]);
+    }, [token, selectedYear, groupBy, quarter, selectedPlatform]);
+
+    const reportTitle = `Cost Report by ${groupBy.charAt(0).toUpperCase() + groupBy.slice(1)} for ${selectedYear}${quarter !== 'all' ? ` - ${quarter}` : ''}`;
+    const exportFilename = `cost_report_${groupBy}_${selectedYear}${quarter !== 'all' ? `_${quarter}` : ''}`;
 
     const handleExportPDF = () => {
         const doc = new jsPDF();
         const groupByName = groupBy.charAt(0).toUpperCase() + groupBy.slice(1);
         
         doc.setFontSize(18);
-        doc.text(`Cost Report by ${groupByName} for ${selectedYear}`, 14, 22);
+        doc.text(reportTitle, 14, 22);
         doc.setFontSize(11);
         doc.setTextColor(100);
         doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
@@ -59,14 +66,14 @@ const GcpReportsView = () => {
             startY: 40,
             head: [[groupByName, 'Total Cost (USD)']],
             body: reportData.map(row => [row.groupName, formatCurrency(row.totalCost)]),
-            headStyles: { fillColor: [22, 163, 74] }, // Green color
+            headStyles: { fillColor: [22, 163, 74] },
             footStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold'},
             foot: [
                 ['Grand Total', formatCurrency(reportData.reduce((sum, row) => sum + row.totalCost, 0))]
             ]
         });
 
-        doc.save(`cost_report_by_${groupBy}_${selectedYear}.pdf`);
+        doc.save(`${exportFilename}.pdf`);
     };
     
     const handleExportCSV = () => {
@@ -83,11 +90,13 @@ const GcpReportsView = () => {
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `cost_report_by_${groupBy}_${selectedYear}.csv`);
+        link.setAttribute("download", `${exportFilename}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     };
+
+    const isDarkMode = document.documentElement.classList.contains('dark');
 
     const chartData = useMemo(() => {
         const topN = 7;
@@ -109,11 +118,11 @@ const GcpReportsView = () => {
             datasets: [{
                 data,
                 backgroundColor: colorPalette,
-                borderColor: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff', // gray-800 or white
+                borderColor: isDarkMode ? '#1f2937' : '#ffffff',
                 borderWidth: 2,
             }]
         };
-    }, [reportData]);
+    }, [reportData, isDarkMode]);
 
     const chartOptions = {
         responsive: true,
@@ -122,16 +131,25 @@ const GcpReportsView = () => {
             legend: {
                 position: 'right',
                 labels: {
-                    color: document.documentElement.classList.contains('dark') ? '#e5e7eb' : '#374151'
+                    color: isDarkMode ? '#e5e7eb' : '#374151'
                 }
             }
         }
     };
     
-    const ToggleButton = ({ value, label }) => (
+    const GroupByButton = ({ value, label }) => (
         <button 
             onClick={() => setGroupBy(value)}
             className={`px-4 py-1.5 text-sm font-semibold rounded-md ${groupBy === value ? 'bg-white dark:bg-gray-600 shadow' : 'text-gray-600 dark:text-gray-300'}`}
+        >
+            {label}
+        </button>
+    );
+
+    const QuarterButton = ({ value, label }) => (
+        <button 
+            onClick={() => setQuarter(value)}
+            className={`px-4 py-1.5 text-sm font-semibold rounded-md ${quarter === value ? 'bg-white dark:bg-gray-600 shadow' : 'text-gray-600 dark:text-gray-300'}`}
         >
             {label}
         </button>
@@ -145,7 +163,7 @@ const GcpReportsView = () => {
             
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
                 <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap items-center gap-4">
                         <div>
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">Year:</label>
                             <select value={selectedYear} onChange={e => setSelectedYear(parseInt(e.target.value))} className="p-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200">
@@ -153,10 +171,20 @@ const GcpReportsView = () => {
                             </select>
                         </div>
                         <div>
+                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">Period:</label>
+                            <div className="flex justify-center bg-gray-100 dark:bg-gray-900 p-1 rounded-lg">
+                                <QuarterButton value="all" label="Yearly" />
+                                <QuarterButton value="Q1" label="Q1" />
+                                <QuarterButton value="Q2" label="Q2" />
+                                <QuarterButton value="Q3" label="Q3" />
+                                <QuarterButton value="Q4" label="Q4" />
+                            </div>
+                        </div>
+                        <div>
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">Group By:</label>
                             <div className="flex justify-center bg-gray-100 dark:bg-gray-900 p-1 rounded-lg">
-                                <ToggleButton value="team" label="Team" />
-                                <ToggleButton value="owner" label="Owner" />
+                                <GroupByButton value="team" label="Team" />
+                                <GroupByButton value="owner" label="Owner" />
                             </div>
                         </div>
                     </div>
@@ -173,8 +201,12 @@ const GcpReportsView = () => {
                 </div>
 
                 {isLoading ? (
-                    <div className="space-y-2 mt-4">
-                        {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                         <div className="lg:col-span-2"><Skeleton className="h-80 w-full" /></div>
+                         <div className="lg:col-span-3 space-y-2">
+                            {/* 🔹 UPDATED: Added unique key to skeleton */}
+                            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                         </div>
                     </div>
                 ) : reportData.length === 0 ? (
                     <div className="text-center py-10 text-gray-500 dark:text-gray-400">
@@ -200,8 +232,8 @@ const GcpReportsView = () => {
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                        {reportData.map((row, index) => (
-                                            <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                        {reportData.map((row) => (
+                                            <tr key={row.groupName} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                                                 <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900 dark:text-white">{row.groupName}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right font-semibold text-gray-700 dark:text-gray-300">{formatCurrency(row.totalCost)}</td>
                                             </tr>

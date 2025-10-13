@@ -1,8 +1,14 @@
-import React, { createContext, useState, useEffect, useCallback } from 'react';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 
 export const GlobalStateContext = createContext();
+
+const parseJwt = (token) => {
+  try {
+    return JSON.parse(atob(token.split('.')[1]));
+  } catch (e) {
+    return null;
+  }
+};
 
 const useYearlyBillingData = (platform, year, token, dataVersion) => {
   const [processedData, setProcessedData] = useState({ current: [], previous: [] });
@@ -10,7 +16,6 @@ const useYearlyBillingData = (platform, year, token, dataVersion) => {
 
   useEffect(() => {
     const fetchDataAndProcess = async () => {
-      // Use the selectedPlatform for the API call
       if (!platform || !year || !token) {
         setProcessedData({ current: [], previous: [] });
         setIsLoading(false);
@@ -45,7 +50,7 @@ const useYearlyBillingData = (platform, year, token, dataVersion) => {
                         project_name: projectName,
                         platform: item.platform,
                         billing_year: item.billing_year,
-                        service_breakdown: [] ,
+                        service_breakdown: [],
                         total_cost: 0
                     };
                     months.forEach(m => { projects[projectName][`${m}_cost`] = 0; });
@@ -105,7 +110,9 @@ export const GlobalStateProvider = ({ children }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authError, setAuthError] = useState('');
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [userPlatforms, setUserPlatforms] = useState([]);
 
+  const [selectedPlatform, setSelectedPlatform] = useState(() => sessionStorage.getItem('selectedPlatform') || null);
   const [envFilter, setEnvFilter] = useState('all');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [dataVersion, setDataVersion] = useState(0);
@@ -113,12 +120,52 @@ export const GlobalStateProvider = ({ children }) => {
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'system');
   const [dashboardProjectFilter, setDashboardProjectFilter] = useState('all');
   
-  // 🔹 ADDED: State to manage the selected platform ('GCP' or 'AWS')
-  const [selectedPlatform, setSelectedPlatform] = useState(() => sessionStorage.getItem('selectedPlatform') || null);
+  const logoutTimerRef = useRef(null);
 
-  // This custom hook now depends on the selectedPlatform
   const { yearlyBillingData, previousYearBillingData, isBillingLoading } = useYearlyBillingData(selectedPlatform, selectedYear, token, dataVersion);
+  
+  const logout = useCallback(() => {
+    if (logoutTimerRef.current) {
+        clearTimeout(logoutTimerRef.current);
+    }
+    setToken(null);
+    setUserRole(null); 
+    setIsLoggedIn(false); 
+    setSelectedPlatform(null);
+    setUserPlatforms([]);
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("userRole");
+    sessionStorage.removeItem("authToken");
+    sessionStorage.removeItem("userRole");
+    sessionStorage.removeItem("selectedPlatform");
+  }, []);
+  
+  const setAuthSession = useCallback((data, rememberMe) => {
+    const decodedToken = parseJwt(data.token);
+    if (!decodedToken || !decodedToken.exp) {
+        console.error("Invalid token received.");
+        return;
+    }
 
+    const expiresIn = (decodedToken.exp * 1000) - Date.now();
+    
+    if (expiresIn <= 0) {
+        logout();
+        return;
+    }
+
+    setToken(data.token);
+    setUserRole(data.role);
+    setUserPlatforms(data.accessible_platforms || []);
+    setIsLoggedIn(true);
+
+    const storage = rememberMe ? localStorage : sessionStorage;
+    storage.setItem("authToken", data.token);
+    storage.setItem("userRole", data.role);
+
+    logoutTimerRef.current = setTimeout(logout, expiresIn);
+  }, [logout]);
+  
   useEffect(() => {
     if (selectedPlatform) {
         sessionStorage.setItem('selectedPlatform', selectedPlatform);
@@ -153,6 +200,7 @@ export const GlobalStateProvider = ({ children }) => {
     return () => {
         mediaQuery.removeEventListener('change', handleSystemThemeChange);
     };
+    // 🔹 CORRECTED: Added [theme] dependency back
   }, [theme]);
 
   const triggerRefetch = () => setDataVersion(v => v + 1);
@@ -160,13 +208,18 @@ export const GlobalStateProvider = ({ children }) => {
   useEffect(() => {
     const savedToken = localStorage.getItem("authToken") || sessionStorage.getItem("authToken");
     const savedRole = localStorage.getItem("userRole") || sessionStorage.getItem("userRole");
+    
     if (savedToken && savedRole) {
-      setToken(savedToken);
-      setUserRole(savedRole);
-      setIsLoggedIn(true);
+      const decodedToken = parseJwt(savedToken);
+      if (decodedToken && decodedToken.exp * 1000 > Date.now()) {
+        const isRemembered = !!localStorage.getItem("authToken");
+        setAuthSession({ token: savedToken, role: savedRole, accessible_platforms: [] }, isRemembered);
+      } else {
+        logout();
+      }
     }
     setIsAuthLoading(false);
-  }, []);
+  }, [logout, setAuthSession]);
 
   const login = async (username, password, rememberMe) => {
     setAuthError('');
@@ -178,12 +231,7 @@ export const GlobalStateProvider = ({ children }) => {
       });
       if (response.ok) {
         const data = await response.json();
-        setToken(data.token);
-        setUserRole(data.role);
-        setIsLoggedIn(true);
-        const storage = rememberMe ? localStorage : sessionStorage;
-        storage.setItem("authToken", data.token);
-        storage.setItem("userRole", data.role);
+        setAuthSession(data, rememberMe);
       } else {
         const result = await response.json();
         setAuthError(result.error || 'Invalid username or password.');
@@ -192,41 +240,12 @@ export const GlobalStateProvider = ({ children }) => {
       setAuthError('Login failed. Please ensure the backend is running.');
     }
   };
-  
-  const logout = () => {
-    setToken(null);
-    setUserRole(null); 
-    setIsLoggedIn(false); 
-    setSelectedPlatform(null);
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("userRole");
-    sessionStorage.removeItem("authToken");
-    sessionStorage.removeItem("userRole");
-    sessionStorage.removeItem("selectedPlatform");
-  };
 
   const value = {
-    token,
-    userRole,
-    isLoggedIn,
-    isAuthLoading,
-    authError,
-    login,
-    logout,
-    envFilter, setEnvFilter,
-    selectedYear, setSelectedYear,
-    yearlyBillingData,
-    previousYearBillingData,
-    isBillingLoading,
-    triggerRefetch,
-    isSidebarCollapsed, 
-    setIsSidebarCollapsed,
-    theme,
-    setTheme,
-    dashboardProjectFilter,
-    setDashboardProjectFilter,
-    selectedPlatform,
-    setSelectedPlatform
+    token, userRole, isLoggedIn, isAuthLoading, authError, login, logout, userPlatforms,
+    selectedPlatform, setSelectedPlatform, envFilter, setEnvFilter, selectedYear, setSelectedYear,
+    yearlyBillingData, previousYearBillingData, isBillingLoading, triggerRefetch,
+    isSidebarCollapsed, setIsSidebarCollapsed, theme, setTheme, dashboardProjectFilter, setDashboardProjectFilter,
   };
 
   return (

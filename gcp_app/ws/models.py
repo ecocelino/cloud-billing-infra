@@ -18,6 +18,7 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='user')
+    accessible_platforms = db.Column(db.JSON, nullable=True)
     
     # Relationship to assigned projects
     assigned_projects = db.relationship('Project', secondary=user_project_assignments, lazy='subquery',

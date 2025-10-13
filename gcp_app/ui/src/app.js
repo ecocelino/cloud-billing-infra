@@ -8,8 +8,7 @@ import LoginPage from './components/LoginPage';
 import ForgotPasswordView from './components/ForgotPasswordView';
 import SelectPlatform from './components/SelectPlatform';
 import ProfileView from './components/ProfileView';
-//import ProjectDetailView from './components/ProjectDetailView';
-
+import ProjectDetailPage from './components/gcp/GcpProjectDetailView';
 
 // Page Wrappers from the 'pages' directory
 import DashboardPage from './pages/DashboardPage';
@@ -18,11 +17,10 @@ import BillingPage from './pages/BillingPage';
 import BudgetsPage from './pages/BudgetsPage';
 import ReportsPage from './pages/ReportsPage';
 import PricingPage from './pages/PricingPage';
-import ProjectDetailPage from './pages/ProjectDetailPage';
 
 // Global Settings components
 import { UsersView, CustomizeView } from './components/SettingsView';
-import GcpBusinessRulesView from './components/gcp/GcpBusinessRulesView'; // Assuming this is the new name and location
+import GcpBusinessRulesView from './components/gcp/GcpBusinessRulesView';
 
 
 const pagePermissions = {
@@ -284,7 +282,13 @@ const AppContent = () => {
 };
 
 const AppRouter = () => {
-    const { isLoggedIn, isAuthLoading, login, authError, selectedPlatform } = useContext(GlobalStateContext);
+    const { isLoggedIn, isAuthLoading, login, authError, selectedPlatform, userPlatforms, setSelectedPlatform } = useContext(GlobalStateContext);
+
+    useEffect(() => {
+        if (isLoggedIn && userPlatforms.length === 1 && !selectedPlatform) {
+            setSelectedPlatform(userPlatforms[0]);
+        }
+    }, [isLoggedIn, userPlatforms, selectedPlatform, setSelectedPlatform]);
 
     if (isAuthLoading) {
         return <div className="flex items-center justify-center h-screen font-semibold text-gray-500 dark:bg-gray-900 dark:text-gray-400">Authenticating...</div>;

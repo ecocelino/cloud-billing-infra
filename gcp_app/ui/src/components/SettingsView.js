@@ -28,7 +28,7 @@ export const UsersView = () => {
     const [users, setUsers] = useState([]);
     const [projects, setProjects] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [newUser, setNewUser] = useState({ username: '', email: '', password: '', role: 'user' });
+    const [newUser, setNewUser] = useState({ username: '', email: '', password: '', role: 'user', accessible_platforms: ['GCP'] });
     
     const [notification, setNotification] = useState({ message: '', type: '' });
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -102,6 +102,28 @@ export const UsersView = () => {
         setNewUser(prev => ({ ...prev, [name]: value }));
     };
 
+    const handlePlatformChange = (platform, isChecked) => {
+        const currentPlatforms = newUser.accessible_platforms || [];
+        let newPlatforms;
+        if (isChecked) {
+            newPlatforms = [...currentPlatforms, platform];
+        } else {
+            newPlatforms = currentPlatforms.filter(p => p !== platform);
+        }
+        setNewUser(prev => ({ ...prev, accessible_platforms: newPlatforms }));
+    };
+
+    const handleEditPlatformChange = (platform, isChecked) => {
+        const currentPlatforms = editingUser.accessible_platforms || [];
+        let newPlatforms;
+        if (isChecked) {
+            newPlatforms = [...currentPlatforms, platform];
+        } else {
+            newPlatforms = currentPlatforms.filter(p => p !== platform);
+        }
+        setEditingUser(prev => ({ ...prev, accessible_platforms: newPlatforms }));
+    };
+
     const handleCreateUser = async (e) => {
         e.preventDefault();
         if (!newUser.username || !newUser.password || !newUser.email) {
@@ -117,7 +139,7 @@ export const UsersView = () => {
             const result = await response.json();
             if (response.ok) {
                 setNotification({ message: 'User created successfully!', type: 'success' });
-                setNewUser({ username: '', email: '', password: '', role: 'user' });
+                setNewUser({ username: '', email: '', password: '', role: 'user', accessible_platforms: ['GCP'] });
                 fetchUsers();
             } else {
                 setNotification({ message: result.error || 'Failed to create user.', type: 'error' });
@@ -168,6 +190,7 @@ export const UsersView = () => {
         const payload = { 
             email: editingUser.email,
             role: editingUser.role,
+            accessible_platforms: editingUser.accessible_platforms,
             assigned_project_ids: editingUser.role === 'user' ? (editingUser.assigned_projects || []).map(p => p.id) : []
         };
         if (editPassword) payload.password = editPassword;
@@ -207,7 +230,7 @@ export const UsersView = () => {
             <Notification message={notification.message} type={notification.type} />
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
                 <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-4 flex items-center"><UserPlus className="mr-2" />Add New User</h3>
-                <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Username</label>
                         <input type="text" name="username" value={newUser.username} onChange={handleInputChange} className="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-200" autoComplete="username"/>
@@ -231,6 +254,19 @@ export const UsersView = () => {
                             {currentUserRole === 'superadmin' && <option value="superadmin">SuperAdmin</option>}
                         </select>
                     </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Platform Access</label>
+                        <div className="mt-2 flex gap-4">
+                            <label className="flex items-center">
+                                <input type="checkbox" checked={newUser.accessible_platforms.includes('GCP')} onChange={(e) => handlePlatformChange('GCP', e.target.checked)} className="h-4 w-4 rounded" />
+                                <span className="ml-2 text-sm text-gray-800 dark:text-gray-200">GCP</span>
+                            </label>
+                            <label className="flex items-center">
+                                <input type="checkbox" checked={newUser.accessible_platforms.includes('AWS')} onChange={(e) => handlePlatformChange('AWS', e.target.checked)} className="h-4 w-4 rounded" />
+                                <span className="ml-2 text-sm text-gray-800 dark:text-gray-200">AWS</span>
+                            </label>
+                        </div>
+                    </div>
                     <button type="submit" className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800">Create User</button>
                 </form>
             </div>
@@ -243,6 +279,7 @@ export const UsersView = () => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Username</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Email</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Role</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Platforms</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Assigned Projects</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Actions</th>
                             </tr>
@@ -253,6 +290,7 @@ export const UsersView = () => {
                                     <td className="px-6 py-4 whitespace-nowrap">{user.username}</td>
                                     <td className="px-6 py-4 whitespace-nowrap">{user.email}</td>
                                     <td className="px-6 py-4 whitespace-nowrap">{user.role}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold">{user.accessible_platforms?.join(', ') || 'None'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{user.assigned_projects?.length || 0}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                         <button onClick={() => openEditModal(user)} className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 disabled:text-gray-400 disabled:cursor-not-allowed" disabled={currentUserRole === 'admin' && user.role === 'superadmin'}><Edit size={18} /></button>
@@ -287,6 +325,19 @@ export const UsersView = () => {
                                 <button type="button" onClick={() => setShowEditPassword(!showEditPassword)} className="absolute inset-y-0 right-0 top-6 pr-3 flex items-center text-gray-500 dark:text-gray-400">
                                    {showEditPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                 </button>
+                            </div>
+                             <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Platform Access</label>
+                                <div className="mt-2 flex gap-4">
+                                    <label className="flex items-center">
+                                        <input type="checkbox" checked={editingUser.accessible_platforms?.includes('GCP')} onChange={(e) => handleEditPlatformChange('GCP', e.target.checked)} className="h-4 w-4 rounded" />
+                                        <span className="ml-2 text-sm text-gray-800 dark:text-gray-200">GCP</span>
+                                    </label>
+                                    <label className="flex items-center">
+                                        <input type="checkbox" checked={editingUser.accessible_platforms?.includes('AWS')} onChange={(e) => handleEditPlatformChange('AWS', e.target.checked)} className="h-4 w-4 rounded" />
+                                        <span className="ml-2 text-sm text-gray-800 dark:text-gray-200">AWS</span>
+                                    </label>
+                                </div>
                             </div>
                             {editingUser.role === 'user' && (
                                 <div>
