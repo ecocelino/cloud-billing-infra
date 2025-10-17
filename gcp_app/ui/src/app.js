@@ -1,6 +1,6 @@
 import React, { useState, useContext, useRef, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate, useLocation } from 'react-router-dom';
-import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut, Settings, Filter, Tag, ChevronDown, ChevronsLeft, ChevronsRight, FileText, Users, FileCog, Palette, User as ProfileIcon, ScrollText } from 'lucide-react';
+import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut, Settings, Filter, Tag, ChevronDown, ChevronsLeft, ChevronsRight, FileText, Users, FileCog, Palette, User as ProfileIcon, ScrollText, GitBranchPlus } from 'lucide-react';
 import { GlobalStateProvider, GlobalStateContext } from './context/GlobalStateContext';
 
 // --- Component & Page Imports ---
@@ -8,7 +8,7 @@ import LoginPage from './components/LoginPage';
 import ForgotPasswordView from './components/ForgotPasswordView';
 import SelectPlatform from './components/SelectPlatform';
 import ProfileView from './components/ProfileView';
-import ProjectDetailPage from './components/gcp/GcpProjectDetailView';
+import ProjectDetailPage from './pages/ProjectDetailPage';
 
 // Page Wrappers from the 'pages' directory
 import DashboardPage from './pages/DashboardPage';
@@ -122,14 +122,18 @@ const Sidebar = () => {
     return (
         <nav className={`main-sidebar bg-white dark:bg-gray-800 p-4 shadow-lg flex flex-col sticky top-0 h-screen transition-all duration-300 z-20 ${isSidebarCollapsed ? 'w-20 items-center' : 'w-64'}`}>
             <div className={`flex items-center space-x-2 mb-4 px-2 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
-                <Cloud size={40} className="text-blue-600 flex-shrink-0" />
+                {selectedPlatform === 'AWS' ? (
+                    <img src="/images/aws-logo.png" alt="AWS Logo" className="w-10 h-10 flex-shrink-0 dark:invert" />
+                ) : (
+                    <img src="/images/gcp-logo.png" alt="GCP Logo" className="w-10 h-10 flex-shrink-0" />
+                )}
                 {!isSidebarCollapsed && <h1 className="text-xl font-bold text-gray-900 dark:text-white">Cloud Cost System</h1>}
             </div>
 
             {!isSidebarCollapsed && (
                 <div className="px-3 py-2 mb-4 text-center">
-                    <button onClick={handleChangePlatform} className="w-full text-sm font-semibold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/40 rounded-lg py-2 hover:bg-blue-200 dark:hover:bg-blue-900">
-                        Change Platform ({selectedPlatform})
+                    <button onClick={handleChangePlatform} className="w-full text-sm font-semibold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/40 rounded-lg py-2 hover:bg-blue-200 dark:hover:bg-blue-900 flex items-center justify-center gap-2">
+                        <GitBranchPlus size={16}/> Change Platform ({selectedPlatform})
                     </button>
                 </div>
             )}
@@ -144,7 +148,7 @@ const Sidebar = () => {
                     )
                 ))}
                 
-                {canView('/pricing') && 
+                {canView('/pricing') && selectedPlatform === 'GCP' &&
                     <div ref={pricingDropdownRef} className="relative">
                         <button onClick={() => setIsPricingMenuOpen(prev => !prev)} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
                             <div className="flex items-center space-x-3">

@@ -7,6 +7,8 @@ services:
     # This line tells the container to load variables from your .env file
     env_file:
       - ./gcp_app/.env
+    ports:
+      - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     restart: always
