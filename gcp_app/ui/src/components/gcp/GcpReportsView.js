@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useMemo } from 'react';
+import React, { useState, useEffect, useContext, useMemo, useRef } from 'react';
 import { GlobalStateContext } from '../../context/GlobalStateContext';
 import { ScrollText, Loader2, Download, FileDown } from 'lucide-react';
 import { formatCurrency } from '../../utils';
@@ -8,18 +8,36 @@ import Skeleton from '../shared/Skeleton';
 import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 
-ChartJS.register(ArcElement, Tooltip, Legend);
+// 🔹 1. Create a custom plugin to draw a background color
+const canvasBGFiller = {
+  id: 'canvasBGFiller',
+  beforeDraw(chart) {
+    if (chart.options.plugins.canvasBGFiller && chart.options.plugins.canvasBGFiller.color) {
+      const ctx = chart.canvas.getContext('2d');
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-over';
+      ctx.fillStyle = chart.options.plugins.canvasBGFiller.color;
+      ctx.fillRect(0, 0, chart.width, chart.height);
+      ctx.restore();
+    }
+  }
+};
+
+// 🔹 2. Register the new plugin with ChartJS
+ChartJS.register(ArcElement, Tooltip, Legend, canvasBGFiller);
 
 const years = [2023, 2024, 2025, 2026, 2027];
 const colorPalette = ['#3b82f6', '#10b981', '#ef4444', '#f97316', '#8b5cf6', '#64748b', '#f59e0b', '#d946ef'];
 
 
 const GcpReportsView = () => {
-    const { token, selectedYear, setSelectedYear, selectedPlatform } = useContext(GlobalStateContext);
+    const { token, selectedYear, setSelectedYear, selectedPlatform, theme } = useContext(GlobalStateContext);
     const [reportData, setReportData] = useState([]);
     const [groupBy, setGroupBy] = useState('team');
     const [isLoading, setIsLoading] = useState(true);
     const [quarter, setQuarter] = useState('all');
+    
+    const pieChartRef = useRef(null);
 
     useEffect(() => {
         const fetchReportData = async () => {
@@ -62,16 +80,52 @@ const GcpReportsView = () => {
         doc.setTextColor(100);
         doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
 
-        autoTable(doc, {
-            startY: 40,
-            head: [[groupByName, 'Total Cost (USD)']],
-            body: reportData.map(row => [row.groupName, formatCurrency(row.totalCost)]),
-            headStyles: { fillColor: [22, 163, 74] },
-            footStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold'},
-            foot: [
-                ['Grand Total', formatCurrency(reportData.reduce((sum, row) => sum + row.totalCost, 0))]
-            ]
-        });
+        const chart = pieChartRef.current;
+        if (chart) {
+            try {
+                // 🔹 3. Save the original colors
+                const originalLegendColor = chart.options.plugins.legend.labels.color;
+                const originalBgColor = chart.options.plugins.canvasBGFiller.color;
+
+                // 🔹 4. Force colors for PDF export (black text, white background)
+                chart.options.plugins.legend.labels.color = '#000000';
+                chart.options.plugins.canvasBGFiller.color = '#ffffff';
+                chart.update('none'); // Re-render the chart immediately
+
+                // 🔹 5. Get the image from the updated chart
+                const chartImage = chart.toBase64Image('image/png', 1.0);
+
+                // 🔹 6. Restore the original colors for the live on-screen chart
+                chart.options.plugins.legend.labels.color = originalLegendColor;
+                chart.options.plugins.canvasBGFiller.color = originalBgColor;
+                chart.update('none');
+
+                // 🔹 7. Add image and table to PDF
+                doc.addImage(chartImage, 'PNG', 15, 40, 100, 50); 
+                autoTable(doc, {
+                    startY: 100, 
+                    head: [[groupByName, 'Total Cost (USD)']],
+                    body: reportData.map(row => [row.groupName, formatCurrency(row.totalCost)]),
+                    headStyles: { fillColor: [22, 163, 74] },
+                    footStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold'},
+                    foot: [['Grand Total', formatCurrency(reportData.reduce((sum, row) => sum + row.totalCost, 0))]]
+                });
+
+            } catch (e) {
+                console.error("Error adding chart to PDF:", e);
+                // Fallback here
+            }
+        } else {
+             // Fallback if chart isn't available
+            autoTable(doc, {
+                startY: 40,
+                head: [[groupByName, 'Total Cost (USD)']],
+                body: reportData.map(row => [row.groupName, formatCurrency(row.totalCost)]),
+                headStyles: { fillColor: [22, 163, 74] },
+                footStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold'},
+                foot: [['Grand Total', formatCurrency(reportData.reduce((sum, row) => sum + row.totalCost, 0))]]
+            });
+        }
 
         doc.save(`${exportFilename}.pdf`);
     };
@@ -96,7 +150,12 @@ const GcpReportsView = () => {
         document.body.removeChild(link);
     };
 
-    const isDarkMode = document.documentElement.classList.contains('dark');
+    const isDarkMode = useMemo(() => {
+        if (theme === 'system') {
+            return window.matchMedia('(prefers-color-scheme: dark)').matches;
+        }
+        return theme === 'dark';
+    }, [theme]);
 
     const chartData = useMemo(() => {
         const topN = 7;
@@ -124,18 +183,38 @@ const GcpReportsView = () => {
         };
     }, [reportData, isDarkMode]);
 
-    const chartOptions = {
+    const chartOptions = useMemo(() => ({
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
+            // 🔹 8. Set the background color for the live chart
+            canvasBGFiller: {
+                color: isDarkMode ? '#1f2937' : '#ffffff'
+            },
+            title: {
+                display: false,
+                color: isDarkMode ? '#e5e7eb' : '#374151',
+            },
             legend: {
                 position: 'right',
                 labels: {
-                    color: isDarkMode ? '#e5e7eb' : '#374151'
+                    color: isDarkMode ? '#e5e7eb' : '#374151',
+                    font: {
+                        size: 14
+                    }
                 }
+            },
+            tooltip: {
+                bodyFont: { size: 14 },
+                titleFont: { size: 14 }
+            }
+        },
+        layout: {
+            padding: {
+                right: 20
             }
         }
-    };
+    }), [isDarkMode]);
     
     const GroupByButton = ({ value, label }) => (
         <button 
@@ -204,7 +283,6 @@ const GcpReportsView = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                          <div className="lg:col-span-2"><Skeleton className="h-80 w-full" /></div>
                          <div className="lg:col-span-3 space-y-2">
-                            {/* 🔹 UPDATED: Added unique key to skeleton */}
                             {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
                          </div>
                     </div>
@@ -217,7 +295,7 @@ const GcpReportsView = () => {
                         <div className="lg:col-span-2">
                             <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">Cost Distribution</h3>
                             <div className="relative h-80">
-                                <Pie data={chartData} options={chartOptions} />
+                                <Pie ref={pieChartRef} data={chartData} options={chartOptions} />
                             </div>
                         </div>
                         <div className="lg:col-span-3">

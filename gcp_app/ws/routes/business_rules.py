@@ -21,18 +21,18 @@ def get_rules(current_user):
         'rule_type': rule.rule_type,
         'is_active': rule.is_active,
         'config': rule.config,
-        # 🔹 ADDED: Return dates as ISO strings
         'start_date': rule.start_date.isoformat() if rule.start_date else None,
-        'end_date': rule.end_date.isoformat() if rule.end_date else None
+        'end_date': rule.end_date.isoformat() if rule.end_date else None,
+        'platform': rule.platform
     } for rule in rules])
 
 @business_rules_bp.route("/api/business-rules", methods=["POST"])
 @token_required
-@role_required(roles=['admin', 'superadmin'])
+@role_required(roles=['superadmin'])
 def create_rule(current_user):
     data = request.get_json()
     
-    if not all(field in data for field in ['name', 'rule_type', 'config']):
+    if not all(field in data for field in ['name', 'rule_type', 'config', 'platform']):
         return jsonify({'error': 'Missing required fields'}), 400
 
     if BusinessRule.query.filter_by(name=data['name']).first():
@@ -44,9 +44,9 @@ def create_rule(current_user):
         rule_type=data['rule_type'],
         is_active=data.get('is_active', True),
         config=data['config'],
-        # 🔹 ADDED: Set dates from incoming request
         start_date=date_from_iso(data.get('start_date')),
-        end_date=date_from_iso(data.get('end_date'))
+        end_date=date_from_iso(data.get('end_date')),
+        platform=data.get('platform')
     )
     
     db.session.add(new_rule)
@@ -56,7 +56,7 @@ def create_rule(current_user):
 
 @business_rules_bp.route("/api/business-rules/<int:rule_id>", methods=["PUT"])
 @token_required
-@role_required(roles=['admin', 'superadmin'])
+@role_required(roles=['superadmin'])
 def update_rule(current_user, rule_id):
     rule = BusinessRule.query.get_or_404(rule_id)
     data = request.get_json()
@@ -65,7 +65,6 @@ def update_rule(current_user, rule_id):
         rule.is_active = data['is_active']
     if 'config' in data:
         rule.config = data['config']
-    # 🔹 ADDED: Update dates
     if 'start_date' in data:
         rule.start_date = date_from_iso(data.get('start_date'))
     if 'end_date' in data:

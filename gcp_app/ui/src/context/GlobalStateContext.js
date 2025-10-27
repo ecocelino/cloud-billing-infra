@@ -120,14 +120,41 @@ export const GlobalStateProvider = ({ children }) => {
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'system');
   const [dashboardProjectFilter, setDashboardProjectFilter] = useState('all');
   
-  const logoutTimerRef = useRef(null);
+  // 🔹 UPDATED: Renamed timer ref for clarity
+  const tokenExpiryTimerRef = useRef(null);
+  // 🔹 ADDED: New timer ref for user inactivity
+  const idleTimerRef = useRef(null);
 
   const { yearlyBillingData, previousYearBillingData, isBillingLoading } = useYearlyBillingData(selectedPlatform, selectedYear, token, dataVersion);
   
-  const logout = useCallback(() => {
-    if (logoutTimerRef.current) {
-        clearTimeout(logoutTimerRef.current);
+  // 🔹 ADDED: This function resets the inactivity timer
+  const resetIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
     }
+    
+    // Set a new 30-minute timer. 30 * 60 * 1000 = 1,800,000 milliseconds
+    idleTimerRef.current = setTimeout(() => {
+        console.log("User inactive for 30 minutes, logging out.");
+        logout();
+    }, 1800000);
+  }, []); // We will add 'logout' as a dependency later
+
+  const logout = useCallback(() => {
+    if (tokenExpiryTimerRef.current) {
+        clearTimeout(tokenExpiryTimerRef.current);
+    }
+    // 🔹 ADDED: Clear the idle timer on logout
+    if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+    }
+    
+    // 🔹 ADDED: Remove event listeners on logout
+    window.removeEventListener('mousemove', resetIdleTimer);
+    window.removeEventListener('mousedown', resetIdleTimer);
+    window.removeEventListener('keypress', resetIdleTimer);
+    window.removeEventListener('touchstart', resetIdleTimer);
+
     setToken(null);
     setUserRole(null); 
     setIsLoggedIn(false); 
@@ -138,7 +165,7 @@ export const GlobalStateProvider = ({ children }) => {
     sessionStorage.removeItem("authToken");
     sessionStorage.removeItem("userRole");
     sessionStorage.removeItem("selectedPlatform");
-  }, []);
+  }, [resetIdleTimer]); // Add resetIdleTimer to dependency array
   
   const setAuthSession = useCallback((data, rememberMe) => {
     const decodedToken = parseJwt(data.token);
@@ -163,9 +190,37 @@ export const GlobalStateProvider = ({ children }) => {
     storage.setItem("authToken", data.token);
     storage.setItem("userRole", data.role);
 
-    logoutTimerRef.current = setTimeout(logout, expiresIn);
-  }, [logout]);
+    // This timer logs out when the token itself expires
+    tokenExpiryTimerRef.current = setTimeout(logout, expiresIn);
+    
+    // 🔹 ADDED: Start the inactivity timer
+    resetIdleTimer();
+  }, [logout, resetIdleTimer]);
   
+  // 🔹 ADDED: This effect runs when the user logs in or out
+  useEffect(() => {
+    if (isLoggedIn) {
+        // If logged in, start listening for activity
+        window.addEventListener('mousemove', resetIdleTimer);
+        window.addEventListener('mousedown', resetIdleTimer);
+        window.addEventListener('keypress', resetIdleTimer);
+        window.addEventListener('touchstart', resetIdleTimer);
+        // Start the first timer
+        resetIdleTimer();
+    }
+    
+    // Cleanup function: removes listeners when component unmounts or user logs out
+    return () => {
+        window.removeEventListener('mousemove', resetIdleTimer);
+        window.removeEventListener('mousedown', resetIdleTimer);
+        window.removeEventListener('keypress', resetIdleTimer);
+        window.removeEventListener('touchstart', resetIdleTimer);
+        if (idleTimerRef.current) {
+            clearTimeout(idleTimerRef.current);
+        }
+    };
+  }, [isLoggedIn, resetIdleTimer]);
+
   useEffect(() => {
     if (selectedPlatform) {
         sessionStorage.setItem('selectedPlatform', selectedPlatform);
@@ -200,7 +255,6 @@ export const GlobalStateProvider = ({ children }) => {
     return () => {
         mediaQuery.removeEventListener('change', handleSystemThemeChange);
     };
-    // 🔹 CORRECTED: Added [theme] dependency back
   }, [theme]);
 
   const triggerRefetch = () => setDataVersion(v => v + 1);

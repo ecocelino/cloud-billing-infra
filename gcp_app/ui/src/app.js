@@ -1,6 +1,6 @@
 import React, { useState, useContext, useRef, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate, useLocation } from 'react-router-dom';
-import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut, Settings, Filter, Tag, ChevronDown, ChevronsLeft, ChevronsRight, FileText, Users, FileCog, Palette, User as ProfileIcon, ScrollText, GitBranchPlus } from 'lucide-react';
+import { Cloud, LayoutDashboard, FolderOpen, BarChart3, LogOut, Settings, Filter, Tag, ChevronDown, ChevronsLeft, ChevronsRight, FileText, Users, FileCog, Palette, User as ProfileIcon, ScrollText, GitBranchPlus, FileUp } from 'lucide-react';
 import { GlobalStateProvider, GlobalStateContext } from './context/GlobalStateContext';
 
 // --- Component & Page Imports ---
@@ -8,15 +8,16 @@ import LoginPage from './components/LoginPage';
 import ForgotPasswordView from './components/ForgotPasswordView';
 import SelectPlatform from './components/SelectPlatform';
 import ProfileView from './components/ProfileView';
-import ProjectDetailPage from './pages/ProjectDetailPage';
 
-// Page Wrappers from the 'pages' directory
+// Page Wrappers
 import DashboardPage from './pages/DashboardPage';
 import ProjectsPage from './pages/ProjectsPage';
 import BillingPage from './pages/BillingPage';
 import BudgetsPage from './pages/BudgetsPage';
 import ReportsPage from './pages/ReportsPage';
 import PricingPage from './pages/PricingPage';
+import ProjectDetailPage from './pages/ProjectDetailPage';
+import DataUploadPage from './pages/DataUploadPage'; // 🔹 1. IMPORT THE NEW PAGE
 
 // Global Settings components
 import { UsersView, CustomizeView } from './components/SettingsView';
@@ -31,6 +32,7 @@ const pagePermissions = {
     '/reports': ['user', 'admin', 'superadmin'],
     '/pricing': ['user', 'admin', 'superadmin'],
     '/settings/users': ['admin', 'superadmin'],
+    '/settings/data-upload': ['admin', 'superadmin'], // 🔹 2. ADD PERMISSION FOR THE NEW PAGE
     '/settings/business-rules': ['admin', 'superadmin'],
     '/settings/customize-view': ['admin', 'superadmin'],
     '/profile': ['user', 'admin', 'superadmin'],
@@ -189,6 +191,7 @@ const Sidebar = () => {
                         {isSettingsMenuOpen && !isSidebarCollapsed && (
                              <div className="pt-2 pl-6 space-y-1">
                                 <NavLink to="/settings/users" onClick={() => setIsSettingsMenuOpen(false)} className={({ isActive }) => `flex items-center space-x-3 w-full text-left px-3 py-1.5 rounded text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 ${isActive ? 'font-semibold text-blue-600 dark:text-blue-400' : ''}`}><Users size={16} className="mr-2"/>Users</NavLink>
+                                <NavLink to="/settings/data-upload" onClick={() => setIsSettingsMenuOpen(false)} className={({ isActive }) => `flex items-center space-x-3 w-full text-left px-3 py-1.5 rounded text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 ${isActive ? 'font-semibold text-blue-600 dark:text-blue-400' : ''}`}><FileUp size={16} className="mr-2"/>Data Upload</NavLink>
                                 <NavLink to="/settings/business-rules" onClick={() => setIsSettingsMenuOpen(false)} className={({ isActive }) => `flex items-center space-x-3 w-full text-left px-3 py-1.5 rounded text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 ${isActive ? 'font-semibold text-blue-600 dark:text-blue-400' : ''}`}><FileCog size={16} className="mr-2"/>Business Rules</NavLink>
                                 <NavLink to="/settings/customize-view" onClick={() => setIsSettingsMenuOpen(false)} className={({ isActive }) => `flex items-center space-x-3 w-full text-left px-3 py-1.5 rounded text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 ${isActive ? 'font-semibold text-blue-600 dark:text-blue-400' : ''}`}><Palette size={16} className="mr-2"/>Customize View</NavLink>
                             </div>
@@ -198,6 +201,7 @@ const Sidebar = () => {
                                 <h4 className="px-2 pt-1 pb-2 text-sm font-semibold text-gray-500 dark:text-gray-400 border-b dark:border-gray-600 mb-1">Settings</h4>
                                 <div className="flex flex-col space-y-1">
                                     <button onClick={() => handleSettingsNavigation('/settings/users')} className="w-full text-left px-2 py-1.5 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">Users</button>
+                                    <button onClick={() => handleSettingsNavigation('/settings/data-upload')} className="w-full text-left px-2 py-1.5 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">Data Upload</button>
                                     <button onClick={() => handleSettingsNavigation('/settings/business-rules')} className="w-full text-left px-2 py-1.5 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">Business Rules</button>
                                     <button onClick={() => handleSettingsNavigation('/settings/customize-view')} className="w-full text-left px-2 py-1.5 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">Customize View</button>
                                 </div>
@@ -274,6 +278,7 @@ const AppContent = () => {
                         <Route path="/reports" element={<ProtectedRoute path="/reports" element={<ReportsPage />} />} />
                         <Route path="/pricing/:tier" element={<ProtectedRoute path="/pricing" element={<PricingPage />} />} />
                         <Route path="/settings/users" element={<ProtectedRoute path="/settings/users" element={<UsersView />} />} />
+                        <Route path="/settings/data-upload" element={<ProtectedRoute path="/settings/data-upload" element={<DataUploadPage />} />} />
                         <Route path="/settings/business-rules" element={<ProtectedRoute path="/settings/business-rules" element={<BusinessRulesPageWrapper />} />} />
                         <Route path="/settings/customize-view" element={<ProtectedRoute path="/settings/customize-view" element={<CustomizeView />} />} />
                         <Route path="/profile" element={<ProtectedRoute path="/profile" element={<ProfileView />} />} />

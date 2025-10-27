@@ -59,14 +59,24 @@ const GcpProjectDetailView = () => {
   // ✅ Chart color scheme based on theme
   const isDark = theme === 'dark';
 
+  // ✅ Fix: Ensure months are sorted Jan → Dec
+  const monthOrder = [
+    'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+    'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'
+  ];
+
+  const sortedEntries = Object.entries(project?.costHistory || {}).sort(
+    ([a], [b]) => monthOrder.indexOf(a.toUpperCase()) - monthOrder.indexOf(b.toUpperCase())
+  );
+
   const chartData = {
-    labels: Object.keys(project?.costHistory || {}).map(m => m.toUpperCase()),
+    labels: sortedEntries.map(([month]) => month.toUpperCase()),
     datasets: [
       {
         label: `Monthly Cost for ${selectedYear}`,
-        data: Object.values(project?.costHistory || {}),
+        data: sortedEntries.map(([, value]) => value),
         backgroundColor: isDark
-          ? 'rgba(96, 165, 250, 0.8)' // lighter blue for dark mode
+          ? 'rgba(96, 165, 250, 0.8)'
           : 'rgba(59, 130, 246, 0.6)',
         borderWidth: 0,
         borderRadius: 6
@@ -75,46 +85,46 @@ const GcpProjectDetailView = () => {
   };
 
   // ✅ Chart style options
-const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-const isDarkMode = theme === 'dark' || (theme === 'system' && prefersDark);
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const isDarkMode = theme === 'dark' || (theme === 'system' && prefersDark);
 
-const chartOptions = {
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      labels: {
-        color: isDarkMode ? '#E5E7EB' : '#1F2937',
+  const chartOptions = {
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: {
+          color: isDarkMode ? '#E5E7EB' : '#1F2937',
+        },
+      },
+      tooltip: {
+        titleColor: isDarkMode ? '#F9FAFB' : '#1F2937',
+        bodyColor: isDarkMode ? '#F9FAFB' : '#1F2937',
+        backgroundColor: isDarkMode ? '#111827' : '#FFFFFF',
+        borderColor: isDarkMode ? '#374151' : '#E5E7EB',
+        borderWidth: 1,
+        titleFont: { weight: 'bold' },
+        bodyFont: { weight: '500' },
       },
     },
-    tooltip: {
-      titleColor: isDarkMode ? '#F9FAFB' : '#1F2937',
-      bodyColor: isDarkMode ? '#F9FAFB' : '#1F2937',
-      backgroundColor: isDarkMode ? '#111827' : '#FFFFFF',
-      borderColor: isDarkMode ? '#374151' : '#E5E7EB',
-      borderWidth: 1,
-      titleFont: { weight: 'bold' },
-      bodyFont: { weight: '500' },
-    },
-  },
-  scales: {
-    x: {
-      grid: { display: false },
-      ticks: {
-        color: isDarkMode ? '#E5E7EB' : '#1F2937',
-        font: { size: 12, weight: '600' },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: {
+          color: isDarkMode ? '#E5E7EB' : '#1F2937',
+          font: { size: 12, weight: '600' },
+        },
+        border: { display: false },
       },
-      border: { display: false },
-    },
-    y: {
-      grid: { display: false },
-      ticks: {
-        color: isDarkMode ? '#E5E7EB' : '#1F2937',
-        font: { size: 12, weight: '600' },
+      y: {
+        grid: { display: false },
+        ticks: {
+          color: isDarkMode ? '#E5E7EB' : '#1F2937',
+          font: { size: 12, weight: '600' },
+        },
+        border: { display: false },
       },
-      border: { display: false },
     },
-  },
-};
+  };
 
   // ✅ Loading skeleton
   if (isLoading) {
