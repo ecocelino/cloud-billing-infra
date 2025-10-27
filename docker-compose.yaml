@@ -6,7 +6,7 @@ services:
     container_name: mysql_db
     # This line tells the container to load variables from your .env file
     env_file:
-      - ./gcp_app/.env
+      - ./cloud_app/.env
     ports:
       - "3306:3306"
     volumes:
@@ -22,14 +22,14 @@ services:
 
   backend:
     build:
-      context: ./gcp_app/ws
+      context: ./cloud_app/ws
       dockerfile: docker/Dockerfile
     ports:
       - "5000:5000"
     volumes:
-      - ./gcp_app/ws:/app
+      - ./cloud_app/ws:/app
     env_file:
-      - ./gcp_app/.env
+      - ./cloud_app/.env
     depends_on:
       mysql:
         condition: service_healthy
@@ -40,16 +40,16 @@ services:
 
   frontend:
     build:
-      context: ./gcp_app/ui
+      context: ./cloud_app/ui
       dockerfile: docker/Dockerfile
     ports:
       - "3000:3000"
     volumes:
-      - ./gcp_app/ui:/app
+      - ./cloud_app/ui:/app
       - /app/node_modules
     # 🔹 UPDATED: The 'proxy' setting in package.json is better than env_file here
     # env_file:
-    #   - ./gcp_app/.env
+    #   - ./cloud_app/.env
     depends_on:
       - backend
     restart: always
